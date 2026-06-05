@@ -22,23 +22,25 @@ public sealed class StateMachine
     /// <summary>Pick the next active behaviour to start from idle.</summary>
     public PetState NextAction()
     {
-        // Rough weights: Walk 45%, Chase 20%, Sleep 20%, Eat 15%.
         // Disabled behaviours re-roll as Walk.
         double roll = _rng.NextDouble();
 
-        if (_settings.EnableCursorChase && roll < 0.20)
+        if (roll < 0.08)
+            return PetState.Zoomies;                 // rare burst of energy
+        if (_settings.EnableCursorChase && roll < 0.26)
             return PetState.Chase;
-        if (_settings.EnableSleep && roll < 0.40)
+        if (_settings.EnableSleep && roll < 0.44)
             return PetState.Sleep;
-        if (roll < 0.55)
+        if (roll < 0.58)
             return PetState.Eat;
 
         return PetState.Walk;
     }
 
-    public double WalkDuration()  => 1.5 + _rng.NextDouble() * 3.0;
-    public double SleepDuration() => 4.0 + _rng.NextDouble() * 6.0;
-    public double ChaseDuration() => 2.5 + _rng.NextDouble() * 3.0;
+    public double WalkDuration()    => 1.5 + _rng.NextDouble() * 3.0;
+    public double SleepDuration()   => 4.0 + _rng.NextDouble() * 6.0;
+    public double ChaseDuration()   => 2.5 + _rng.NextDouble() * 3.0;
+    public double ZoomiesDuration() => 1.4 + _rng.NextDouble() * 1.8;
 
     /// <summary>+1 (right) or -1 (left).</summary>
     public int RandomFacing() => _rng.Next(2) == 0 ? -1 : 1;

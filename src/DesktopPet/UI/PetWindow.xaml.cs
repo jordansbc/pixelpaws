@@ -106,19 +106,45 @@ public partial class PetWindow : Window, IPetView
             _engine?.EndPet();
     }
 
+    private System.Windows.Point _downPos;
+    private bool _pressing;
+    private bool _dragging;
+
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
-        _engine?.BeginDrag();
+        // Don't start a drag yet — wait to see if this is a tap (boop) or a drag.
+        _downPos  = PointToScreen(e.GetPosition(this));
+        _pressing = true;
+        _dragging = false;
         CaptureMouse();
         e.Handled = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_pressing && !_dragging)
+        {
+            var p = PointToScreen(e.GetPosition(this));
+            if (Math.Abs(p.X - _downPos.X) + Math.Abs(p.Y - _downPos.Y) > 8)
+            {
+                _dragging = true;
+                _engine?.BeginDrag();   // movement => pick it up
+            }
+        }
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
         ReleaseMouseCapture();
-        _engine?.EndDrag();
+        if (_dragging)
+            _engine?.EndDrag();
+        else
+            _engine?.Boop();            // tap with no movement => boop
+        _pressing = false;
+        _dragging = false;
         if (IsMouseOver)
             _engine?.BeginPet();
         e.Handled = true;

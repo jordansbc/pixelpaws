@@ -13,5 +13,7 @@ public enum PetState
     Stretch,     // scheduled stretch reminder
     Typing,      // user is typing normally
     TypingFast,  // user is typing very fast (red heat mode)
-    Play         // unrolling toilet paper while the user scrolls
+    Play,        // unrolling toilet paper while the user scrolls
+    Zoomies,     // random burst of fast running across the screen
+    Bat          // swatting at the cursor when it rests nearby
 }

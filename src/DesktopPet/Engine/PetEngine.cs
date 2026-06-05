@@ -63,6 +63,13 @@ public sealed class PetEngine
     private double   _tpLength;            // current toilet-paper length (DIP)
     private double   _tpIdle;              // seconds since last scroll
     private double   _lastDragX, _lastDragY; // last cursor pos while dragging (DIP)
+    private double   _prevCurX, _prevCurY; // cursor position last frame (DIP)
+    private double   _cursorSpeed;         // cursor speed (DIP/sec)
+    private double   _batCooldown;         // seconds until the cat may swat again
+
+    private const double ZoomSpeed   = 360;  // px/sec during zoomies
+    private const double BatRange    = 150;  // how close the cursor must rest to be swatted
+    private const double BatCalm     = 140;  // cursor must be slower than this to be swatted
     private List<Surface> _surfaces = new();
 
     private const double TpPerNotch  = 26.0;   // paper added per scroll notch
@@ -139,6 +146,16 @@ public sealed class PetEngine
             EnterState(PetState.Idle);
     }
 
+    /// <summary>A quick tap on the cat — happy boop with a heart burst.</summary>
+    public void Boop()
+    {
+        if (_state == PetState.Drag || _state == PetState.Fall) return;
+        _view.SpawnHearts();
+        _view.SpawnHearts();
+        _heartTimer = 0;
+        EnterState(PetState.Pet);   // brief happy face; reverts on mouse-leave
+    }
+
     // ── main loop ─────────────────────────────────────────────────────────────
 
     public void Update(double dt)
@@ -153,6 +170,13 @@ public sealed class PetEngine
         // Surface refresh
         _surfaceTimer -= dt;
         if (_surfaceTimer <= 0) { RefreshSurfaces(); _surfaceTimer = SurfaceRefresh; }
+
+        // Track cursor speed (used by bat-at-cursor and, later, hunting).
+        var cur = CursorDip();
+        double cdx = cur.X - _prevCurX, cdy = cur.Y - _prevCurY;
+        _cursorSpeed = Math.Sqrt(cdx * cdx + cdy * cdy) / Math.Max(dt, 1e-3);
+        _prevCurX = cur.X; _prevCurY = cur.Y;
+        if (_batCooldown > 0) _batCooldown -= dt;
 
         // ── scroll → toilet-paper play ──────────────────────────────────────────
         UpdateToiletPaper(dt);
@@ -209,6 +233,8 @@ public sealed class PetEngine
             case PetState.Typing:
             case PetState.TypingFast: UpdateTyping(dt);     break;
             case PetState.Play:       UpdateStationary(dt); break;
+            case PetState.Zoomies:    UpdateZoomies(dt);    break;
+            case PetState.Bat:        UpdateBat(dt);        break;
             case PetState.Fall:       UpdateFall(dt);       break;
             case PetState.Drag:       UpdateDrag(dt);       break;
         }
@@ -226,6 +252,17 @@ public sealed class PetEngine
         var cursor = CursorDip();
         int dir = Math.Sign(cursor.X - CenterX);
         if (dir != 0) _facing = dir;
+
+        // Swat at the cursor when it rests still right beside the cat.
+        if (_batCooldown <= 0 && _cursorSpeed < BatCalm)
+        {
+            double dx = Math.Abs(cursor.X - CenterX), dy = Math.Abs(cursor.Y - (FeetY - _h * 0.25));
+            if (dx > _w * 0.30 && dx < BatRange && dy < BatRange)
+            {
+                EnterState(PetState.Bat);
+                return;
+            }
+        }
 
         _stateTimer -= dt;
         if (_stateTimer <= 0)
@@ -276,6 +313,36 @@ public sealed class PetEngine
         if (!IsSupported()) { EnterState(PetState.Fall); return; }
         _stateTimer -= dt;
         if (_stateTimer <= 0) EnterState(PetState.Idle);
+    }
+
+    private void UpdateZoomies(double dt)
+    {
+        _x += _vx * dt;
+        if (ClampHorizontally()) { _facing = -_facing; _vx = -_vx; }   // bounce off screen edges
+
+        if (!IsSupported())
+        {
+            _vx = _facing * ZoomSpeed * 0.4;
+            EnterState(PetState.Fall);
+            return;
+        }
+
+        _stateTimer -= dt;
+        if (_stateTimer <= 0) EnterState(PetState.Idle);
+    }
+
+    private void UpdateBat(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        // Keep facing the cursor while swatting.
+        var cursor = CursorDip();
+        int dir = Math.Sign(cursor.X - CenterX);
+        if (dir != 0) _facing = dir;
+
+        _stateTimer -= dt;
+        // Stop early if the cursor darts away.
+        if (_stateTimer <= 0 || Math.Abs(cursor.X - CenterX) > BatRange * 1.6)
+            EnterState(PetState.Idle);
     }
 
     private void UpdateEat(double dt)
@@ -429,6 +496,19 @@ public sealed class PetEngine
                 // reaching paw points toward the paper.
                 _facing = CenterX > System.Windows.SystemParameters.PrimaryScreenWidth / 2 ? -1 : 1;
                 _anim.Play("play");  // sideways paw-reach toward the paper
+                break;
+            case PetState.Zoomies:
+                _facing = _sm.RandomFacing();
+                _vx = _facing * ZoomSpeed;
+                _vy = 0;
+                _stateTimer = _sm.ZoomiesDuration();
+                _anim.Play("walk");
+                break;
+            case PetState.Bat:
+                _vx = 0; _vy = 0;
+                _batCooldown = 4.0;
+                _stateTimer = 0.9;
+                _anim.Play("play");   // reuse the sideways paw-reach as a swat
                 break;
             case PetState.Fall:
                 _anim.Play("fall");
