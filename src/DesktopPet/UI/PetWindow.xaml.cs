@@ -83,8 +83,8 @@ public partial class PetWindow : Window, IPetView
         Effects?.Burst(Left + Width / 2, Top);
     }
 
-    public void DrawToiletPaper(double screenCenterX, double screenFeetY, double length)
-        => Effects?.DrawToiletPaper(screenCenterX, screenFeetY, length);
+    public void DrawToiletPaper(double catLeft, double catTop, double catW, double catH, double length)
+        => Effects?.DrawToiletPaper(catLeft, catTop, catW, catH, length);
 
     public void ClearToiletPaper()
         => Effects?.ClearToiletPaper();

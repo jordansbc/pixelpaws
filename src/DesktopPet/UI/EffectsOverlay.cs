@@ -46,85 +46,101 @@ public sealed class EffectsOverlay : Window
         DesktopPet.Native.Win32.MakeClickThrough(new WindowInteropHelper(this).Handle);
     }
 
-    // ── Toilet paper ────────────────────────────────────────────────────────────
-    private Border? _tp;       // the trailing strip along the surface
-    private Ellipse? _tpPile;  // crumpled wad at the end
+    // ── Toilet paper (free-standing holder beside the cat, paper hanging straight down) ──
+    private readonly List<FrameworkElement> _tpParts = new();
+    private System.Windows.Shapes.Rectangle? _tpPole;
+    private Ellipse? _tpBase, _tpRoll, _tpHole, _tpPile;
+    private Border?  _tpSheet;
+    private static readonly SolidColorBrush PaperOutline = new(Color.FromRgb(180, 180, 198));
+    private static readonly SolidColorBrush HolderBrush  = new(Color.FromRgb(170, 174, 190));
+
+    private static System.Windows.Media.Effects.DropShadowEffect SoftShadow() =>
+        new() { Color = Colors.Black, BlurRadius = 7, ShadowDepth = 1, Opacity = 0.22 };
 
     /// <summary>
-    /// Draw/refresh a toilet-paper trail of the given length (DIP) strewn along the surface the
-    /// cat stands on, extending toward the roomier side of the screen so it's always visible.
+    /// Draw/refresh a toilet-paper holder beside the cat: a little stand with a roll near the top
+    /// and a perforated sheet hanging straight down, `length` DIP long (clamped to the floor).
     /// </summary>
-    public void DrawToiletPaper(double screenX, double screenFeetY, double length)
+    public void DrawToiletPaper(double catLeft, double catTop, double catW, double catH, double length)
     {
-        const double paperWidth = 24; // visual thickness of the strip lying on the floor
+        double rollR  = Math.Max(9, Math.Min(15, catW * 0.10));
+        double sheetW = rollR * 1.25;
 
-        if (_tp == null)
+        if (_tpSheet == null)
         {
-            // Vertical perforation ticks tiled along the strip so it reads as paper and is
-            // visible on light backgrounds.
+            // Horizontal perforation ticks tiled down the hanging sheet.
             var perf = new DrawingBrush
             {
                 TileMode      = TileMode.Tile,
                 ViewportUnits = BrushMappingMode.Absolute,
-                Viewport      = new Rect(0, 0, 26, paperWidth),
+                Viewport      = new Rect(0, 0, sheetW, 16),
                 Drawing = new GeometryDrawing(
                     null,
-                    new Pen(new SolidColorBrush(Color.FromArgb(60, 150, 150, 170)), 1.2)
+                    new Pen(new SolidColorBrush(Color.FromArgb(55, 150, 150, 170)), 1.1)
                     { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) },
-                    new LineGeometry(new Point(25, 0), new Point(25, paperWidth)))
+                    new LineGeometry(new Point(0, 15), new Point(sheetW, 15)))
             };
-            var outline = new SolidColorBrush(Color.FromRgb(176, 176, 196)); // visible on white
-            _tp = new Border
+            _tpPole  = new System.Windows.Shapes.Rectangle { Fill = HolderBrush, RadiusX = 3, RadiusY = 3, IsHitTestVisible = false, Effect = SoftShadow() };
+            _tpBase  = new Ellipse { Fill = HolderBrush, IsHitTestVisible = false, Effect = SoftShadow() };
+            _tpSheet = new Border
             {
-                Height           = paperWidth,
-                Background       = Brushes.White,
-                BorderBrush      = outline,
-                BorderThickness  = new Thickness(1.5),
-                CornerRadius     = new CornerRadius(3),
-                IsHitTestVisible = false,
-                // Perforation ticks drawn on top of the white fill.
-                Child            = new System.Windows.Shapes.Rectangle { Fill = perf },
-                Effect           = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black, BlurRadius = 8, ShadowDepth = 1, Opacity = 0.25
-                }
+                Background = Brushes.White, BorderBrush = PaperOutline, BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(2, 2, 4, 4), IsHitTestVisible = false,
+                Child = new System.Windows.Shapes.Rectangle { Fill = perf }, Effect = SoftShadow()
             };
-            _tpPile = new Ellipse
+            _tpRoll  = new Ellipse { Fill = Brushes.White, Stroke = PaperOutline, StrokeThickness = 1.5, IsHitTestVisible = false, Effect = SoftShadow() };
+            _tpHole  = new Ellipse { Fill = new SolidColorBrush(Color.FromRgb(150, 150, 168)), IsHitTestVisible = false };
+            _tpPile  = new Ellipse { Fill = Brushes.White, Stroke = PaperOutline, StrokeThickness = 1.5, IsHitTestVisible = false, Effect = SoftShadow() };
+
+            // z-order: pole/base behind, then sheet, then roll + hole on top.
+            foreach (var e in new FrameworkElement[] { _tpPole, _tpBase, _tpPile, _tpSheet, _tpRoll, _tpHole })
             {
-                Width = 32, Height = paperWidth + 12,
-                Fill = Brushes.White,
-                Stroke = outline, StrokeThickness = 1.5,
-                IsHitTestVisible = false,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black, BlurRadius = 6, ShadowDepth = 1, Opacity = 0.25
-                }
-            };
-            _canvas.Children.Add(_tp);
-            _canvas.Children.Add(_tpPile);
+                _canvas.Children.Add(e);
+                _tpParts.Add(e);
+            }
         }
 
-        double localX = screenX - Left;
-        double localY = (screenFeetY - Top) - paperWidth; // sit the strip on the surface
+        // Local (overlay) coordinates.
+        double catCx  = catLeft + catW / 2 - Left;
+        double topL   = catTop - Top;
+        double feetY  = catTop + catH - Top;
 
-        // Extend toward whichever side has more room so the trail stays on-screen.
-        bool toLeft = localX > Width / 2;
-        double stripLeft = toLeft ? localX - length : localX;
+        // Holder stands on the roomier side of the cat so it stays on-screen.
+        int side = catCx > Width / 2 ? -1 : 1;
+        double rollCx = catCx + side * (catW * 0.46);
+        double rollCy = topL + catH * 0.16;
 
-        _tp!.Width = length;
-        Canvas.SetLeft(_tp, stripLeft);
-        Canvas.SetTop(_tp, localY);
+        // Pole + base (thin free-standing stand).
+        double poleW = Math.Max(4, rollR * 0.28);
+        _tpPole!.Width = poleW; _tpPole.Height = Math.Max(0, feetY - rollCy);
+        Canvas.SetLeft(_tpPole, rollCx - poleW / 2); Canvas.SetTop(_tpPole, rollCy);
+        _tpBase!.Width = rollR * 2.0; _tpBase.Height = rollR * 0.5;
+        Canvas.SetLeft(_tpBase, rollCx - rollR); Canvas.SetTop(_tpBase, feetY - rollR * 0.35);
 
-        double pileX = toLeft ? stripLeft - 12 : stripLeft + length - 18;
-        _tpPile!.Visibility = length > 45 ? Visibility.Visible : Visibility.Collapsed;
-        Canvas.SetLeft(_tpPile, pileX);
-        Canvas.SetTop(_tpPile, localY - 5);
+        // Hanging sheet: from just under the roll, down `length`, clamped to the floor.
+        double sheetTop = rollCy + rollR * 0.5;
+        double sheetLen = Math.Max(0, Math.Min(length, feetY - sheetTop - 2));
+        _tpSheet!.Width = sheetW; _tpSheet.Height = sheetLen;
+        Canvas.SetLeft(_tpSheet, rollCx - sheetW / 2); Canvas.SetTop(_tpSheet, sheetTop);
+
+        // Roll + hole sit on top.
+        _tpRoll!.Width = _tpRoll.Height = rollR * 2;
+        Canvas.SetLeft(_tpRoll, rollCx - rollR); Canvas.SetTop(_tpRoll, rollCy - rollR);
+        _tpHole!.Width = _tpHole.Height = rollR * 0.7;
+        Canvas.SetLeft(_tpHole, rollCx - rollR * 0.35); Canvas.SetTop(_tpHole, rollCy - rollR * 0.35);
+
+        // Small pile when the paper has reached the floor.
+        bool piled = sheetLen >= feetY - sheetTop - 3 && length > 30;
+        _tpPile!.Visibility = piled ? Visibility.Visible : Visibility.Collapsed;
+        _tpPile.Width = sheetW + 14; _tpPile.Height = rollR * 0.9;
+        Canvas.SetLeft(_tpPile, rollCx - (sheetW + 14) / 2); Canvas.SetTop(_tpPile, feetY - rollR * 0.7);
     }
 
     public void ClearToiletPaper()
     {
-        if (_tp != null)      { _canvas.Children.Remove(_tp);     _tp = null; }
-        if (_tpPile != null)  { _canvas.Children.Remove(_tpPile); _tpPile = null; }
+        foreach (var e in _tpParts) _canvas.Children.Remove(e);
+        _tpParts.Clear();
+        _tpPole = null; _tpBase = null; _tpRoll = null; _tpHole = null; _tpPile = null; _tpSheet = null;
     }
 
     /// <summary>Emit a small burst of hearts/sparkles. Coordinates are screen DIPs.</summary>

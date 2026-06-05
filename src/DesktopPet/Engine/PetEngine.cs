@@ -15,8 +15,8 @@ public interface IPetView
     void SetHeatLevel(double level);
     /// <summary>Burst of floating hearts at the current cat position.</summary>
     void SpawnHearts();
-    /// <summary>Draw/refresh a hanging toilet-paper strip of the given length (DIP) from the cat's feet.</summary>
-    void DrawToiletPaper(double screenCenterX, double screenFeetY, double length);
+    /// <summary>Draw/refresh a toilet-paper holder beside the cat with paper hanging down `length` (DIP).</summary>
+    void DrawToiletPaper(double catLeft, double catTop, double catW, double catH, double length);
     /// <summary>Remove the toilet-paper strip.</summary>
     void ClearToiletPaper();
 }
@@ -64,9 +64,9 @@ public sealed class PetEngine
     private double   _tpIdle;              // seconds since last scroll
     private List<Surface> _surfaces = new();
 
-    private const double TpPerNotch  = 28.0;   // paper added per scroll notch
-    private const double TpMax       = 700.0;  // max strip length
-    private const double TpRetract   = 220.0;  // px/sec retract speed once idle
+    private const double TpPerNotch  = 26.0;   // paper added per scroll notch
+    private const double TpMax       = 170.0;  // max paper length (hangs to about the floor)
+    private const double TpRetract   = 200.0;  // px/sec retract speed once idle
     private const double TpIdleDelay = 1.2;    // seconds of no scroll before retracting
 
     public bool   Paused         { get; set; }
@@ -324,9 +324,9 @@ public sealed class PetEngine
             if (_tpIdle > TpIdleDelay)
                 _tpLength = Math.Max(0, _tpLength - TpRetract * dt);
 
-            // Strip hangs from the cat's feet; if support is lost (dragged), drop it.
+            // Holder stands beside the cat; if support is lost (dragged), drop it.
             if (canPlay)
-                _view.DrawToiletPaper(CenterX, FeetY, _tpLength);
+                _view.DrawToiletPaper(_x, _y, _w, _h, _tpLength);
             else
                 _tpLength = 0;
 
