@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>PixelPaws</AssemblyName>
     <RootNamespace>DesktopPet</RootNamespace>
     <!-- WPF owns DPI awareness via app.manifest (PerMonitorV2); silence the WinForms manifest check. -->

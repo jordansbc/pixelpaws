@@ -6,16 +6,24 @@ open windows, reacts when you type, stretches on a timer, and unrolls toilet pap
 
 Built with **C# / WPF on .NET 8**. Original art (not Comnyang's) — this is a clone of the *mechanism*.
 
-## Run
+## Quick setup (one-click)
+
+After cloning, just **double-click `install.bat`**. It builds the app (Release), puts a
+**PixelPaws shortcut on your Desktop** (with the cat icon), and **enables auto-start at login**.
+
+- `build.bat` — just build, don't install.
+- `install.bat` — build + desktop shortcut + auto-start. Re-run after `git pull` to update.
+- `uninstall.bat` — remove the shortcut and disable auto-start (keeps the app).
+
+Requires the **.NET 8 SDK** (`winget install Microsoft.DotNet.SDK.8` if you don't have it).
+
+## Run manually
 
 ```powershell
 cd desktop-pet
-dotnet build
-# then run the exe:
-.\src\DesktopPet\bin\Debug\net8.0-windows\PixelPaws.exe
+dotnet build -c Release
+.\src\DesktopPet\bin\Release\net8.0-windows\PixelPaws.exe
 ```
-
-Requires the **.NET 8 SDK** (`winget install Microsoft.DotNet.SDK.8` if you don't have it).
 
 ## What it does
 
