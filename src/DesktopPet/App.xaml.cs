@@ -125,7 +125,8 @@ public partial class App : Application
     {
         if (_settingsWindow is { IsLoaded: true }) { _settingsWindow.Activate(); return; }
 
-        _settingsWindow = new SettingsWindow(_settings, _settingsService);
+        _settingsWindow = new SettingsWindow(_settings, _settingsService,
+            onChanged: () => _engine?.ApplySize(_settings.SizeScale));
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;

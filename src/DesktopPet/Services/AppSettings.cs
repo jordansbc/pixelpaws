@@ -16,4 +16,7 @@ public sealed class AppSettings
 
     /// <summary>Cat unrolls toilet paper when you scroll the mouse wheel.</summary>
     [JsonPropertyName("enableScrollPlay")] public bool EnableScrollPlay { get; set; } = true;
+
+    /// <summary>Overall size multiplier for the cat (1.0 = default). Range ~0.6–1.8.</summary>
+    [JsonPropertyName("sizeScale")] public double SizeScale { get; set; } = 1.0;
 }

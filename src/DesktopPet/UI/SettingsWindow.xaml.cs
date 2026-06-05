@@ -8,13 +8,15 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings    _settings;
     private readonly SettingsService _service;
+    private readonly Action? _onChanged;
     private bool _loaded;
 
-    public SettingsWindow(AppSettings settings, SettingsService service)
+    public SettingsWindow(AppSettings settings, SettingsService service, Action? onChanged = null)
     {
         InitializeComponent();
-        _settings = settings;
-        _service  = service;
+        _settings  = settings;
+        _service   = service;
+        _onChanged = onChanged;
 
         SpeedSlider.Value           = settings.Speed;
         WindowWalkingBox.IsChecked  = settings.EnableWindowWalking;
@@ -35,7 +37,20 @@ public partial class SettingsWindow : Window
         if (StretchIntervalBox.SelectedItem == null)
             StretchIntervalBox.SelectedIndex = 0;
 
+        // Select the closest size option.
+        foreach (ComboBoxItem item in SizeBox.Items)
+        {
+            if (double.TryParse(item.Tag?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out double s)
+                && Math.Abs(s - settings.SizeScale) < 0.05)
+            {
+                SizeBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (SizeBox.SelectedItem == null) SizeBox.SelectedIndex = 1; // Medium
+
         _loaded = true;
+        SizeBox.SelectionChanged += (_, _) => Apply();
 
         SpeedSlider.ValueChanged            += (_, _) => Apply();
         WindowWalkingBox.Checked            += (_, _) => Apply();
@@ -69,7 +84,12 @@ public partial class SettingsWindow : Window
             int.TryParse(ci.Tag?.ToString(), out int mins))
             _settings.StretchIntervalMinutes = mins;
 
+        if (SizeBox.SelectedItem is ComboBoxItem si &&
+            double.TryParse(si.Tag?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out double size))
+            _settings.SizeScale = size;
+
         _service.Save();
+        _onChanged?.Invoke();   // apply live (e.g. resize the cat)
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

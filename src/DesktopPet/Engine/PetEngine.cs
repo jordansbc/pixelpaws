@@ -11,6 +11,8 @@ public interface IPetView
 {
     double DpiScale { get; }
     void Render(ImageSource frame, double left, double top, int facing);
+    /// <summary>Resize the pet window/image to the given DIP size.</summary>
+    void SetPetSize(double w, double h);
     /// <summary>Heat level 0–1 from typing speed. View applies a red tint.</summary>
     void SetHeatLevel(double level);
     /// <summary>Burst of floating hearts at the current cat position.</summary>
@@ -49,7 +51,7 @@ public sealed class PetEngine
     private readonly MouseMonitor?     _mouse;
 
     // ── physics / position ────────────────────────────────────────────────────
-    private readonly double _w, _h;
+    private double _w, _h;                 // current on-screen pet size (DIP); changes with SizeScale
     private double _x, _y;
     private double _vx, _vy;
     private int    _facing = 1;
@@ -105,14 +107,32 @@ public sealed class PetEngine
         _keyboard        = keyboard;
         _mouse           = mouse;
 
-        _w = anim.Manifest.CellWidth  * anim.Manifest.Scale;
-        _h = anim.Manifest.CellHeight * anim.Manifest.Scale;
+        _sizeScale = Math.Clamp(settings.SizeScale, 0.5, 2.0);
+        _w = anim.Manifest.CellWidth  * anim.Manifest.Scale * _sizeScale;
+        _h = anim.Manifest.CellHeight * anim.Manifest.Scale * _sizeScale;
 
         var work = SystemParameters.WorkArea;
         _x = work.Left + (work.Width - _w) / 2;
         SetFeet(work.Bottom);
         RefreshSurfaces();
         EnterState(PetState.Idle);
+    }
+
+    private double _sizeScale = 1.0;
+
+    /// <summary>Change the cat's overall size at runtime, keeping its feet planted in place.</summary>
+    public void ApplySize(double sizeScale)
+    {
+        sizeScale = Math.Clamp(sizeScale, 0.5, 2.0);
+        if (Math.Abs(sizeScale - _sizeScale) < 0.001) return;
+
+        double feet = FeetY, cx = CenterX;
+        _sizeScale = sizeScale;
+        _w = _anim.Manifest.CellWidth  * _anim.Manifest.Scale * _sizeScale;
+        _h = _anim.Manifest.CellHeight * _anim.Manifest.Scale * _sizeScale;
+        SetCenterX(cx);
+        SetFeet(feet);
+        _view.SetPetSize(_w, _h);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -285,8 +305,8 @@ public sealed class PetEngine
             }
         }
 
-        // On a window ledge, occasionally paw a pebble off the edge.
-        if (_knockCooldown <= 0 && OnLedge() && _sm.Chance(0.004))
+        // On a window ledge, frequently paw a pebble off the edge.
+        if (_knockCooldown <= 0 && OnLedge() && _sm.Chance(0.020))
         {
             EnterState(PetState.Knockoff);
             return;
@@ -662,7 +682,7 @@ public sealed class PetEngine
             case PetState.Knockoff:
                 _vx = 0; _vy = 0;
                 _stateTimer = 1.6;
-                _knockCooldown = 12.0;
+                _knockCooldown = 6.0;
                 // A pebble tumbles off the ledge in front of the cat.
                 _view.DropPebble(_facing >= 0 ? _x + _w * 0.72 : _x + _w * 0.28, FeetY - _h * 0.05);
                 _anim.Play("knockoff");

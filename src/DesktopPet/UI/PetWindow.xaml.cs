@@ -39,13 +39,18 @@ public partial class PetWindow : Window, IPetView
     public void Attach(PetEngine engine, double w, double h)
     {
         _engine = engine;
-        PetImage.Width  = w;
-        PetImage.Height = h;
-        FlipTransform.CenterX = w / 2;
+        SetPetSize(w, h);
 
         _clock.Start();
         _lastSeconds = _clock.Elapsed.TotalSeconds;
         CompositionTarget.Rendering += OnRendering;
+    }
+
+    public void SetPetSize(double w, double h)
+    {
+        PetImage.Width  = w;
+        PetImage.Height = h;
+        FlipTransform.CenterX = w / 2;
     }
 
     private void OnRendering(object? sender, EventArgs e)
