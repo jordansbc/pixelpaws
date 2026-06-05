@@ -62,6 +62,7 @@ public sealed class PetEngine
     private bool     _isPetted;            // true while mouse hovers over the window
     private double   _tpLength;            // current toilet-paper length (DIP)
     private double   _tpIdle;              // seconds since last scroll
+    private double   _lastDragX, _lastDragY; // last cursor pos while dragging (DIP)
     private List<Surface> _surfaces = new();
 
     private const double TpPerNotch  = 26.0;   // paper added per scroll notch
@@ -116,6 +117,8 @@ public sealed class PetEngine
     public void EndDrag()
     {
         _vx = 0; _vy = 0;
+        // Drop from roughly where the cursor released so the compact cat doesn't jump.
+        if (_lastDragY > 0) SetFeet(_lastDragY + _h * 0.30);
         EnterState(PetState.Fall);
     }
 
@@ -362,8 +365,11 @@ public sealed class PetEngine
     private void UpdateDrag(double dt)
     {
         var c = CursorDip();
+        _lastDragX = c.X; _lastDragY = c.Y;
         SetCenterX(c.X);
-        _y = c.Y - _h / 2;
+        // Lift frames are top-anchored (held by the scruff); keep the head near the cursor
+        // so the cat dangles/stretches downward from it.
+        _y = c.Y - _h * 0.06;
         ClampHorizontally();
     }
 
@@ -419,7 +425,10 @@ public sealed class PetEngine
                 break;
             case PetState.Play:
                 _vx = 0; _vy = 0;
-                _anim.Play("pet");   // happy/excited pose while pawing at the paper
+                // Face the roomier side, where the toilet-paper holder appears, so the
+                // reaching paw points toward the paper.
+                _facing = CenterX > System.Windows.SystemParameters.PrimaryScreenWidth / 2 ? -1 : 1;
+                _anim.Play("play");  // sideways paw-reach toward the paper
                 break;
             case PetState.Fall:
                 _anim.Play("fall");

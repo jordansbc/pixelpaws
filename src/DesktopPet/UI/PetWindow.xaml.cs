@@ -70,7 +70,9 @@ public partial class PetWindow : Window, IPetView
 
     public void SetHeatLevel(double level)
     {
-        RedOverlay.Opacity = level * 0.55;
+        // The fast-typing "heat" is now drawn into the sprite (red, steaming cat),
+        // so we no longer tint the whole window red.
+        RedOverlay.Opacity = 0;
     }
 
     /// <summary>Persistent overlay that renders heart/sparkle particles. Set by App.</summary>

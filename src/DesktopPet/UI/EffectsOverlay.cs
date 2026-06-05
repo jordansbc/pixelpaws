@@ -102,13 +102,13 @@ public sealed class EffectsOverlay : Window
 
         // Local (overlay) coordinates.
         double catCx  = catLeft + catW / 2 - Left;
-        double topL   = catTop - Top;
         double feetY  = catTop + catH - Top;
 
-        // Holder stands on the roomier side of the cat so it stays on-screen.
+        // Holder stands right beside the cat (on the roomier side), with the roll up at about
+        // the cat's reaching-paw height so the paper hangs down next to the paw.
         int side = catCx > Width / 2 ? -1 : 1;
-        double rollCx = catCx + side * (catW * 0.46);
-        double rollCy = topL + catH * 0.16;
+        double rollCx = catCx + side * (catW * 0.34);
+        double rollCy = feetY - catH * 0.50;
 
         // Pole + base (thin free-standing stand).
         double poleW = Math.Max(4, rollR * 0.28);
