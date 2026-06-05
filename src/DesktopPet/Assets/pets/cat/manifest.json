@@ -4,7 +4,7 @@
   "cellWidth": 128,
   "cellHeight": 128,
   "columns": 4,
-  "scale": 0.85,
+  "scale": 1.2,
   "animations": {
     "idle":        { "frames": [0, 1],             "fps": 2,    "loop": true  },
     "eat":         { "frames": [2, 3, 2, 3],       "fps": 4,    "loop": false },

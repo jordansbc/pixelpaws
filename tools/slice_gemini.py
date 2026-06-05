@@ -21,7 +21,7 @@ SRC  = os.path.join(HERE, "gemini_cat.png")
 OUT  = os.path.join(HERE, "..", "src", "DesktopPet", "Assets", "pets", "cat", "spritesheet.png")
 
 CELL        = 128      # output cell size (px)
-MARGIN      = 10       # transparent margin inside each cell
+MARGIN      = 4        # transparent margin inside each cell (small: minimizes float above surface)
 WHITE_THRESH = 240     # pixels brighter than this (all channels) become transparent
 GAP_ROW     = 12       # blank rows that separate sprite rows
 GAP_COL     = 20       # blank cols that separate sprites within a row
@@ -54,36 +54,55 @@ def runs(mask_1d, min_gap):
 
 # Known frames per row in the Gemini collage.
 ROW_COUNTS = [4, 4, 4, 4, 2]
+MIN_AREA   = 60   # ignore anti-alias specks
 
-def tight_bbox(mask, t, b, l, r):
-    sub = mask[t:b, l:r]
-    ys = np.where(sub.any(axis=1))[0]
-    xs = np.where(sub.any(axis=0))[0]
-    return (l + xs[0], t + ys[0], l + xs[-1] + 1, t + ys[-1] + 1)
-
-def split_band(mask, t, b, k):
-    """Split a row band into k sprites using equal-width columns (Gemini spaces rows evenly),
-    then tight-crop the content within each column. Robust against floating hearts/Zzz."""
-    col_has = mask[t:b, :].any(axis=0)
-    xs = np.where(col_has)[0]
-    first, last = int(xs[0]), int(xs[-1] + 1)
-    step = (last - first) / k
-    boxes = []
-    for s in range(k):
-        l = int(round(first + s * step))
-        r = int(round(first + (s + 1) * step))
-        boxes.append(tight_bbox(mask, t, b, l, r))
-    return boxes
+def union(a, b):
+    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
 
 def detect(mask):
-    """Return list of bboxes ordered top-to-bottom, left-to-right using known row counts."""
+    """
+    Connected-component detection: find each cat blob and crop only to it (plus its own
+    small accents like hearts / Zzz / food bowl). Avoids capturing slivers of a neighbouring
+    cat that straddles a column boundary.
+    """
+    from scipy import ndimage
+    labeled, n = ndimage.label(mask)
+    slices = ndimage.find_objects(labeled)
+    comps = []
+    for i, sl in enumerate(slices, start=1):
+        if sl is None:
+            continue
+        ys, xs = sl
+        area = int(np.count_nonzero(labeled[sl] == i))
+        if area < MIN_AREA:
+            continue
+        bb = (int(xs.start), int(ys.start), int(xs.stop), int(ys.stop))
+        comps.append({"bb": bb, "area": area,
+                      "cx": (xs.start + xs.stop) / 2, "cy": (ys.start + ys.stop) / 2})
+
+    # Group components into the 5 row bands (by vertical projection of the whole mask).
     row_has = mask.any(axis=1)
     bands = runs(row_has, GAP_ROW)
-    print(f"bands found: {len(bands)} -> {bands}")
+    print(f"bands found: {len(bands)} ; components: {len(comps)}")
+
     boxes = []
     for i, (t, b) in enumerate(bands):
         k = ROW_COUNTS[i] if i < len(ROW_COUNTS) else 1
-        boxes.extend(split_band(mask, t, b, k))
+        members = [c for c in comps if t <= c["cy"] < b]
+        if not members:
+            continue
+        # The k largest blobs are the cats; everything else is an accent.
+        members.sort(key=lambda c: c["area"], reverse=True)
+        mains = members[:k]
+        smalls = members[k:]
+        # Attach each small accent to the nearest cat by horizontal distance.
+        merged = {id(m): m["bb"] for m in mains}
+        for s in smalls:
+            nearest = min(mains, key=lambda m: abs(m["cx"] - s["cx"]))
+            merged[id(nearest)] = union(merged[id(nearest)], s["bb"])
+        # Order this row's cats left-to-right.
+        row_boxes = [merged[id(m)] for m in sorted(mains, key=lambda m: m["cx"])]
+        boxes.extend(row_boxes)
     return boxes
 
 def main():
