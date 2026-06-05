@@ -143,6 +143,35 @@ public sealed class EffectsOverlay : Window
         _tpPole = null; _tpBase = null; _tpRoll = null; _tpHole = null; _tpPile = null; _tpSheet = null;
     }
 
+    /// <summary>A little pebble tumbles down from (x,y) with gravity and fades out.</summary>
+    public void DropPebble(double screenX, double screenY)
+    {
+        var pebble = new Ellipse
+        {
+            Width = 12, Height = 12,
+            Fill = new SolidColorBrush(Color.FromRgb(120, 116, 130)),
+            Stroke = new SolidColorBrush(Color.FromRgb(80, 78, 92)), StrokeThickness = 1,
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(pebble, screenX - Left - 6);
+        Canvas.SetTop(pebble, screenY - Top - 6);
+        _canvas.Children.Add(pebble);
+
+        double vy = 0, x = screenX - Left - 6, y = screenY - Top - 6;
+        double vx = (_rng.NextDouble() - 0.5) * 60;
+        int tick = 0;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) =>
+        {
+            vy += 38;                       // gravity per tick
+            y += vy * 0.016; x += vx * 0.016;
+            Canvas.SetTop(pebble, y); Canvas.SetLeft(pebble, x);
+            if (++tick > 55) { pebble.Opacity = Math.Max(0, pebble.Opacity - 0.08); }
+            if (tick > 70) { timer.Stop(); _canvas.Children.Remove(pebble); }
+        };
+        timer.Start();
+    }
+
     /// <summary>Emit a small burst of hearts/sparkles. Coordinates are screen DIPs.</summary>
     public void Burst(double screenCenterX, double screenTopY)
     {

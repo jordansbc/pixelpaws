@@ -91,6 +91,9 @@ public partial class PetWindow : Window, IPetView
     public void ClearToiletPaper()
         => Effects?.ClearToiletPaper();
 
+    public void DropPebble(double screenX, double screenY)
+        => Effects?.DropPebble(screenX, screenY);
+
     // ── Mouse events ──────────────────────────────────────────────────────────
 
     protected override void OnMouseEnter(MouseEventArgs e)

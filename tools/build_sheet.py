@@ -25,6 +25,7 @@ import os
 HERE  = os.path.dirname(__file__)
 BASE  = os.path.join(HERE, "gemini_cat.png")
 ADDON = os.path.join(HERE, "gemini_addon.png")
+HUNT  = os.path.join(HERE, "gemini_hunt.png")
 OUT   = os.path.join(HERE, "..", "src", "DesktopPet", "Assets", "pets", "cat", "spritesheet.png")
 
 CELL_W, CELL_H = 210, 300
@@ -77,19 +78,23 @@ def detect(mask, row_counts):
         boxes.extend(merged[id(m)] for m in sorted(mains,key=lambda m:m["cx"]))
     return boxes
 
-# ── slice both sources ──
+# ── slice all sources ──
 base_img, base_mask = key_white(BASE)
 addon_img, addon_mask = key_white(ADDON)
+hunt_img, hunt_mask = key_white(HUNT)
 base_boxes  = detect(base_mask,  [4,4,4,4,2])   # 18
 addon_boxes = detect(addon_mask, [4,4,4])        # 12
-print("base frames:", len(base_boxes), " addon frames:", len(addon_boxes))
+hunt_boxes  = detect(hunt_mask,  [4,4,4])        # 12
+print("base:", len(base_boxes), " addon:", len(addon_boxes), " hunt:", len(hunt_boxes))
 
 base_crops  = [base_img.crop(b)  for b in base_boxes]
 addon_crops = [addon_img.crop(b) for b in addon_boxes]
+hunt_crops  = [hunt_img.crop(b)  for b in hunt_boxes]
 
 # Flip everything to face RIGHT (Gemini draws facing left).
 base_crops  = [c.transpose(Image.FLIP_LEFT_RIGHT) for c in base_crops]
 addon_crops = [c.transpose(Image.FLIP_LEFT_RIGHT) for c in addon_crops]
+hunt_crops  = [c.transpose(Image.FLIP_LEFT_RIGHT) for c in hunt_crops]
 
 redtype   = addon_crops[0:2]
 pawreach  = addon_crops[2:4]
@@ -103,6 +108,7 @@ for c in base_crops:                      # 0..17  (incl. old drag at 11, unused
 for c in redtype:  ordered.append((c, "n"))    # 18,19
 for c in pawreach: ordered.append((c, "n"))    # 20,21
 for c in lift:     ordered.append((c, "lift"))  # 22..29
+for c in hunt_crops: ordered.append((c, "n"))   # 30..41 (crouch,pounce,proud,groom,yawn,loaf,gift,knockoff)
 
 # ── scale groups ──
 innerW, innerH = CELL_W - 2*MARGIN, CELL_H - 2*MARGIN
@@ -110,8 +116,9 @@ normalH_region = 150  # cats occupy the bottom of the tall cell
 
 normals = [c for c,g in ordered if g=="n"]
 ws = sorted(c.width for c in normals); hs = sorted(c.height for c in normals)
-# 90th percentile to ignore the single very-wide stretch-flat pose
-w90 = ws[int(len(ws)*0.9)]; h90 = hs[int(len(hs)*0.9)]
+# 65th percentile so the wide lying/crouch/pounce poses don't shrink the sitting cat;
+# those wide frames clamp to the cell width individually below.
+w90 = ws[int(len(ws)*0.65)]; h90 = hs[int(len(hs)*0.65)]
 scale_n = min(innerW / w90, normalH_region / h90, 1.0)
 
 lifts = [c for c,g in ordered if g=="lift"]

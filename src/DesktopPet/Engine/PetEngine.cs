@@ -19,6 +19,8 @@ public interface IPetView
     void DrawToiletPaper(double catLeft, double catTop, double catW, double catH, double length);
     /// <summary>Remove the toilet-paper strip.</summary>
     void ClearToiletPaper();
+    /// <summary>A small pebble tumbles down from (screenX, screenY) and fades — cat knocking things off a ledge.</summary>
+    void DropPebble(double screenX, double screenY);
 }
 
 /// <summary>
@@ -66,10 +68,17 @@ public sealed class PetEngine
     private double   _prevCurX, _prevCurY; // cursor position last frame (DIP)
     private double   _cursorSpeed;         // cursor speed (DIP/sec)
     private double   _batCooldown;         // seconds until the cat may swat again
+    private double   _huntCooldown;        // seconds until the cat may hunt again
+    private double   _knockCooldown;       // seconds until the cat may knock a pebble again
+    private double   _targetX;             // generic target (pounce/gift) in DIP
 
     private const double ZoomSpeed   = 360;  // px/sec during zoomies
     private const double BatRange    = 150;  // how close the cursor must rest to be swatted
     private const double BatCalm     = 140;  // cursor must be slower than this to be swatted
+    private const double HuntTrigger = 1500; // cursor speed (px/sec) that starts a hunt
+    private const double CreepSpeed  = 75;   // px/sec while stalking
+    private const double PounceSpeed = 540;  // px/sec while pouncing
+    private const double PounceRange = 360;  // max horizontal distance to pounce from
     private List<Surface> _surfaces = new();
 
     private const double TpPerNotch  = 26.0;   // paper added per scroll notch
@@ -176,7 +185,9 @@ public sealed class PetEngine
         double cdx = cur.X - _prevCurX, cdy = cur.Y - _prevCurY;
         _cursorSpeed = Math.Sqrt(cdx * cdx + cdy * cdy) / Math.Max(dt, 1e-3);
         _prevCurX = cur.X; _prevCurY = cur.Y;
-        if (_batCooldown > 0) _batCooldown -= dt;
+        if (_batCooldown > 0)   _batCooldown   -= dt;
+        if (_huntCooldown > 0)  _huntCooldown  -= dt;
+        if (_knockCooldown > 0) _knockCooldown -= dt;
 
         // ── scroll → toilet-paper play ──────────────────────────────────────────
         UpdateToiletPaper(dt);
@@ -235,6 +246,14 @@ public sealed class PetEngine
             case PetState.Play:       UpdateStationary(dt); break;
             case PetState.Zoomies:    UpdateZoomies(dt);    break;
             case PetState.Bat:        UpdateBat(dt);        break;
+            case PetState.Hunt:       UpdateHunt(dt);       break;
+            case PetState.Pounce:     UpdatePounce(dt);     break;
+            case PetState.Proud:      UpdateProud(dt);      break;
+            case PetState.Groom:      UpdateStationary(dt); break;
+            case PetState.Yawn:       UpdateYawn(dt);       break;
+            case PetState.Loaf:       UpdateStationary(dt); break;
+            case PetState.Gift:       UpdateGift(dt);       break;
+            case PetState.Knockoff:   UpdateStationary(dt); break;
             case PetState.Fall:       UpdateFall(dt);       break;
             case PetState.Drag:       UpdateDrag(dt);       break;
         }
@@ -247,6 +266,8 @@ public sealed class PetEngine
     private void UpdateIdle(double dt)
     {
         if (!IsSupported()) { EnterState(PetState.Fall); return; }
+
+        if (TryStartHunt()) return;
 
         // Always watch the cursor — face toward it even while idle
         var cursor = CursorDip();
@@ -264,6 +285,13 @@ public sealed class PetEngine
             }
         }
 
+        // On a window ledge, occasionally paw a pebble off the edge.
+        if (_knockCooldown <= 0 && OnLedge() && _sm.Chance(0.004))
+        {
+            EnterState(PetState.Knockoff);
+            return;
+        }
+
         _stateTimer -= dt;
         if (_stateTimer <= 0)
         {
@@ -272,8 +300,27 @@ public sealed class PetEngine
         }
     }
 
+    /// <summary>Begin stalking when the cursor whips past quickly.</summary>
+    private bool TryStartHunt()
+    {
+        if (_huntCooldown <= 0 && _cursorSpeed > HuntTrigger && IsSupported())
+        {
+            EnterState(PetState.Hunt);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>True when the cat is standing on a raised window edge (not the desktop floor).</summary>
+    private bool OnLedge()
+    {
+        return FeetY < SystemParameters.WorkArea.Bottom - 24;
+    }
+
     private void UpdateWalk(double dt)
     {
+        if (TryStartHunt()) return;
+
         _x += _vx * dt * Speed;
         if (ClampHorizontally()) FlipDirection();
 
@@ -343,6 +390,70 @@ public sealed class PetEngine
         // Stop early if the cursor darts away.
         if (_stateTimer <= 0 || Math.Abs(cursor.X - CenterX) > BatRange * 1.6)
             EnterState(PetState.Idle);
+    }
+
+    private void UpdateHunt(double dt)
+    {
+        if (!IsSupported()) { _huntCooldown = 4; EnterState(PetState.Fall); return; }
+
+        var cur = CursorDip();
+        int dir = Math.Sign(cur.X - CenterX);
+        if (dir != 0) _facing = dir;
+        double dx = Math.Abs(cur.X - CenterX);
+
+        // Creep low toward the cursor.
+        if (dx > 24) _x += dir * CreepSpeed * dt;
+        ClampHorizontally();
+
+        // Stalk for at least ~0.6s, then pounce once the cursor holds still within range.
+        if (_stateTimer < 5.4 && _cursorSpeed < 220 && dx > 26 && dx < PounceRange)
+        {
+            _targetX = cur.X;
+            EnterState(PetState.Pounce);
+            return;
+        }
+
+        _stateTimer -= dt;
+        if (_stateTimer <= 0) { _huntCooldown = 5; EnterState(PetState.Idle); }
+    }
+
+    private void UpdatePounce(double dt)
+    {
+        if (!IsSupported()) { _huntCooldown = 4; EnterState(PetState.Fall); return; }
+
+        _x += _facing * PounceSpeed * dt;
+        bool hitWall = ClampHorizontally();
+        double dx = _targetX - CenterX;
+
+        _stateTimer -= dt;
+        if (hitWall || Math.Abs(dx) < 28 || Math.Sign(dx) != _facing || _stateTimer <= 0)
+            EnterState(PetState.Proud);
+    }
+
+    private void UpdateProud(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        _stateTimer -= dt;
+        if (_stateTimer <= 0) EnterState(PetState.Idle);
+    }
+
+    private void UpdateYawn(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        if (_anim.Finished) EnterState(PetState.Sleep);
+    }
+
+    private void UpdateGift(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        int dir = Math.Sign(_targetX - CenterX);
+        if (dir != 0) _facing = dir;
+        _x += dir * BaseWalkSpeed * 1.3 * dt;
+        ClampHorizontally();
+
+        _stateTimer -= dt;
+        if (Math.Abs(_targetX - CenterX) < 26 || _stateTimer <= 0)
+            EnterState(PetState.Proud);   // present it proudly
     }
 
     private void UpdateEat(double dt)
@@ -509,6 +620,52 @@ public sealed class PetEngine
                 _batCooldown = 4.0;
                 _stateTimer = 0.9;
                 _anim.Play("play");   // reuse the sideways paw-reach as a swat
+                break;
+            case PetState.Hunt:
+                _vx = 0; _vy = 0;
+                _stateTimer = 6.0;    // give up stalking after a while
+                _anim.Play("crouch");
+                break;
+            case PetState.Pounce:
+                _vy = 0;
+                _stateTimer = 0.9;
+                _facing = Math.Sign(_targetX - CenterX) >= 0 ? 1 : -1;
+                _anim.Play("pounce");
+                break;
+            case PetState.Proud:
+                _vx = 0; _vy = 0;
+                _stateTimer = 1.1;
+                _huntCooldown = 5.0;
+                _view.SpawnHearts();  // little sparkle of triumph
+                _anim.Play("proud");
+                break;
+            case PetState.Groom:
+                _vx = 0; _vy = 0;
+                _stateTimer = _sm.GroomDuration();
+                _anim.Play("groom");
+                break;
+            case PetState.Yawn:
+                _vx = 0; _vy = 0;
+                _anim.Play("yawn");   // non-looping; leads into sleep
+                break;
+            case PetState.Loaf:
+                _vx = 0; _vy = 0;
+                _stateTimer = _sm.LoafDuration();
+                _anim.Play("loaf");
+                break;
+            case PetState.Gift:
+                _vy = 0;
+                _targetX = SystemParameters.WorkArea.Left + SystemParameters.WorkArea.Width / 2;
+                _stateTimer = 7.0;
+                _anim.Play("gift");
+                break;
+            case PetState.Knockoff:
+                _vx = 0; _vy = 0;
+                _stateTimer = 1.6;
+                _knockCooldown = 12.0;
+                // A pebble tumbles off the ledge in front of the cat.
+                _view.DropPebble(_facing >= 0 ? _x + _w * 0.72 : _x + _w * 0.28, FeetY - _h * 0.05);
+                _anim.Play("knockoff");
                 break;
             case PetState.Fall:
                 _anim.Play("fall");
