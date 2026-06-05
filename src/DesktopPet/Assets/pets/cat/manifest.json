@@ -1,0 +1,20 @@
+{
+  "name": "cat",
+  "sheet": "spritesheet.png",
+  "cellWidth": 128,
+  "cellHeight": 128,
+  "columns": 4,
+  "scale": 0.85,
+  "animations": {
+    "idle":        { "frames": [0, 1],             "fps": 2,    "loop": true  },
+    "eat":         { "frames": [2, 3, 2, 3],       "fps": 4,    "loop": false },
+    "walk":        { "frames": [4, 5, 6, 7],       "fps": 10,   "loop": true  },
+    "sleep":       { "frames": [8, 9],             "fps": 1.2,  "loop": true  },
+    "fall":        { "frames": [10],               "fps": 1,    "loop": true  },
+    "drag":        { "frames": [11],               "fps": 1,    "loop": true  },
+    "pet":         { "frames": [12, 13, 12, 13],   "fps": 5,    "loop": true  },
+    "stretch":     { "frames": [14, 15, 15, 14],   "fps": 1.5,  "loop": false },
+    "typing":      { "frames": [16, 17],           "fps": 7,    "loop": true  },
+    "typingfast":  { "frames": [18, 19],           "fps": 18,   "loop": true  }
+  }
+}

@@ -1,0 +1,57 @@
+<Window x:Class="DesktopPet.UI.StretchNotification"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PixelPaws"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Width="360" Height="90"
+        WindowStartupLocation="Manual">
+    <Border Background="#FFEEDDFF"
+            CornerRadius="14"
+            BorderBrush="#FFCC99DD"
+            BorderThickness="2">
+        <Grid Margin="14,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Paw icon -->
+            <TextBlock Grid.Column="0"
+                       Text="🐾"
+                       FontSize="28"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+
+            <!-- Message -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Stretch time!"
+                           FontSize="14"
+                           FontWeight="Bold"
+                           Foreground="#FF6633AA"/>
+                <TextBlock Text="Stand up and reach for the sky~"
+                           FontSize="11"
+                           Foreground="#FF8855BB"
+                           Margin="0,2,0,0"/>
+            </StackPanel>
+
+            <!-- Dismiss button -->
+            <Button Grid.Column="2"
+                    x:Name="DismissButton"
+                    Content="✕"
+                    Width="22" Height="22"
+                    FontSize="11"
+                    VerticalAlignment="Top"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Foreground="#FFAA88CC"
+                    Cursor="Hand"
+                    Click="DismissButton_Click"/>
+        </Grid>
+    </Border>
+</Window>

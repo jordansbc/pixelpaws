@@ -1,0 +1,28 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# OS junk
+Thumbs.db
+desktop.ini
+
+# Temp test screenshots from verification (keep gemini_cat.png + generated assets)
+tools/screenshot*.png
+tools/strip.png
+tools/cat_*.png
+tools/live.png
+tools/final.png
+tools/real.png
+tools/tp*.png
+tools/typing_*.png
+tools/verify.png
+tools/bottom.png
+tools/close*.png
