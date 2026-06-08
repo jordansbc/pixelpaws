@@ -9,14 +9,16 @@ public partial class SettingsWindow : Window
     private readonly AppSettings    _settings;
     private readonly SettingsService _service;
     private readonly Action? _onChanged;
+    private readonly string _initialPet;
     private bool _loaded;
 
     public SettingsWindow(AppSettings settings, SettingsService service, Action? onChanged = null)
     {
         InitializeComponent();
-        _settings  = settings;
-        _service   = service;
-        _onChanged = onChanged;
+        _settings   = settings;
+        _service    = service;
+        _onChanged  = onChanged;
+        _initialPet = settings.ActivePet;
 
         SpeedSlider.Value           = settings.Speed;
         WindowWalkingBox.IsChecked  = settings.EnableWindowWalking;
@@ -49,8 +51,20 @@ public partial class SettingsWindow : Window
         }
         if (SizeBox.SelectedItem == null) SizeBox.SelectedIndex = 1; // Medium
 
+        // Select the matching cat color.
+        foreach (ComboBoxItem item in CatColorBox.Items)
+        {
+            if (string.Equals(item.Tag?.ToString(), settings.ActivePet, StringComparison.OrdinalIgnoreCase))
+            {
+                CatColorBox.SelectedItem = item;
+                break;
+            }
+        }
+        if (CatColorBox.SelectedItem == null) CatColorBox.SelectedIndex = 0; // Gray
+
         _loaded = true;
         SizeBox.SelectionChanged += (_, _) => Apply();
+        CatColorBox.SelectionChanged += (_, _) => Apply();
 
         SpeedSlider.ValueChanged            += (_, _) => Apply();
         WindowWalkingBox.Checked            += (_, _) => Apply();
@@ -87,6 +101,16 @@ public partial class SettingsWindow : Window
         if (SizeBox.SelectedItem is ComboBoxItem si &&
             double.TryParse(si.Tag?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out double size))
             _settings.SizeScale = size;
+
+        if (CatColorBox.SelectedItem is ComboBoxItem ci2 && ci2.Tag is string pet)
+        {
+            _settings.ActivePet = pet;
+            // The sprite sheet is loaded once at startup, so a color change only
+            // takes effect after a restart — surface that hint when it changes.
+            ColorRestartNote.Visibility =
+                string.Equals(pet, _initialPet, StringComparison.OrdinalIgnoreCase)
+                    ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         _service.Save();
         _onChanged?.Invoke();   // apply live (e.g. resize the cat)

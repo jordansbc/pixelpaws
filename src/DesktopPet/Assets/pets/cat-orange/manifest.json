@@ -1,0 +1,29 @@
+{
+  "name": "cat-orange",
+  "sheet": "spritesheet.png",
+  "cellWidth": 210,
+  "cellHeight": 300,
+  "columns": 4,
+  "scale": 0.6,
+  "animations": {
+    "idle":        { "frames": [0, 1],                          "fps": 2,    "loop": true  },
+    "eat":         { "frames": [2, 3, 2, 3],                    "fps": 4,    "loop": false },
+    "walk":        { "frames": [4, 5, 6, 7],                    "fps": 10,   "loop": true  },
+    "sleep":       { "frames": [8, 9],                          "fps": 1.2,  "loop": true  },
+    "fall":        { "frames": [10],                            "fps": 1,    "loop": true  },
+    "pet":         { "frames": [12, 13, 12, 13],               "fps": 5,    "loop": true  },
+    "stretch":     { "frames": [14, 15, 15, 14],               "fps": 1.5,  "loop": false },
+    "typing":      { "frames": [16, 17],                        "fps": 7,    "loop": true  },
+    "typingfast":  { "frames": [18, 19],                        "fps": 11,   "loop": true  },
+    "play":        { "frames": [20, 21],                        "fps": 5,    "loop": true  },
+    "drag":        { "frames": [22, 23, 24, 25, 26, 27, 28, 29], "fps": 9,  "loop": false },
+    "crouch":      { "frames": [30, 31],                        "fps": 4,    "loop": true  },
+    "pounce":      { "frames": [32, 33],                        "fps": 8,    "loop": false },
+    "proud":       { "frames": [34],                            "fps": 1,    "loop": true  },
+    "groom":       { "frames": [35, 36],                        "fps": 3,    "loop": true  },
+    "yawn":        { "frames": [37, 38],                        "fps": 2.5,  "loop": false },
+    "loaf":        { "frames": [39],                            "fps": 1,    "loop": true  },
+    "gift":        { "frames": [40],                            "fps": 1,    "loop": true  },
+    "knockoff":    { "frames": [41],                            "fps": 1,    "loop": true  }
+  }
+}
