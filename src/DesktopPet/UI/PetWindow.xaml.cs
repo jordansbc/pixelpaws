@@ -51,6 +51,7 @@ public partial class PetWindow : Window, IPetView
         PetImage.Width  = w;
         PetImage.Height = h;
         FlipTransform.CenterX = w / 2;
+        HeatFlip.CenterX = w / 2;
     }
 
     private void OnRendering(object? sender, EventArgs e)
@@ -68,16 +69,20 @@ public partial class PetWindow : Window, IPetView
     public void Render(ImageSource frame, double left, double top, int facing)
     {
         PetImage.Source = frame;
-        FlipTransform.ScaleX = facing >= 0 ? 1 : -1;
+        double sx = facing >= 0 ? 1 : -1;
+        FlipTransform.ScaleX = sx;
+        // Keep the heat overlay aligned with the current frame and facing.
+        HeatMaskBrush.ImageSource = frame;
+        HeatFlip.ScaleX = sx;
         Left = left;
         Top  = top;
     }
 
     public void SetHeatLevel(double level)
     {
-        // The fast-typing "heat" is now drawn into the sprite (red, steaming cat),
-        // so we no longer tint the whole window red.
-        RedOverlay.Opacity = 0;
+        // Red "hot" flush, clipped to the cat silhouette by the OpacityMask. Capped well
+        // below full so the cat's features stay readable through the tint.
+        RedOverlay.Opacity = Math.Clamp(level, 0, 1) * 0.55;
     }
 
     /// <summary>Persistent overlay that renders heart/sparkle particles. Set by App.</summary>

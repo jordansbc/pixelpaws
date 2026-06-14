@@ -66,6 +66,7 @@ public sealed class PetEngine
     private bool     _stretchPending;
     private bool     _isPetted;            // true while mouse hovers over the window
     private bool     _wasAway;             // user was idle long enough that the cat napped
+    private double   _spinFlip;            // countdown to next facing flip during a spin
     private double   _tpLength;            // current toilet-paper length (DIP)
     private double   _tpIdle;              // seconds since last scroll
     private double   _lastDragX, _lastDragY; // last cursor pos while dragging (DIP)
@@ -268,7 +269,7 @@ public sealed class PetEngine
             case PetState.Idle:       UpdateIdle(dt);       break;
             case PetState.Walk:       UpdateWalk(dt);       break;
             case PetState.Chase:      UpdateChase(dt);      break;
-            case PetState.Sleep:      UpdateStationary(dt); break;
+            case PetState.Sleep:      UpdateSleep(dt);      break;
             case PetState.Eat:        UpdateEat(dt);        break;
             case PetState.Pet:        UpdatePet(dt);        break;
             case PetState.Stretch:    UpdateStretch(dt);    break;
@@ -285,6 +286,9 @@ public sealed class PetEngine
             case PetState.Loaf:       UpdateStationary(dt); break;
             case PetState.Gift:       UpdateGift(dt);       break;
             case PetState.Knockoff:   UpdateStationary(dt); break;
+            case PetState.SideRest:   UpdateStationary(dt); break;
+            case PetState.Wakeup:     UpdateWakeup(dt);     break;
+            case PetState.Spin:       UpdateSpin(dt);       break;
             case PetState.Fall:       UpdateFall(dt);       break;
             case PetState.Drag:       UpdateDrag(dt);       break;
         }
@@ -411,6 +415,30 @@ public sealed class PetEngine
     private void UpdateStationary(double dt)
     {
         if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        _stateTimer -= dt;
+        if (_stateTimer <= 0) EnterState(PetState.Idle);
+    }
+
+    /// <summary>Sleep, then wake with a little stretch instead of snapping awake.</summary>
+    private void UpdateSleep(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        _stateTimer -= dt;
+        if (_stateTimer <= 0) EnterState(PetState.Wakeup);
+    }
+
+    private void UpdateWakeup(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        if (_anim.Finished) EnterState(PetState.Idle);
+    }
+
+    /// <summary>Playful in-place spin — flip facing a few times, then settle.</summary>
+    private void UpdateSpin(double dt)
+    {
+        if (!IsSupported()) { EnterState(PetState.Fall); return; }
+        _spinFlip -= dt;
+        if (_spinFlip <= 0) { _facing = -_facing; _spinFlip = 0.14; }
         _stateTimer -= dt;
         if (_stateTimer <= 0) EnterState(PetState.Idle);
     }
@@ -719,6 +747,21 @@ public sealed class PetEngine
                 // A pebble tumbles off the ledge in front of the cat.
                 _view.DropPebble(_facing >= 0 ? _x + _w * 0.72 : _x + _w * 0.28, FeetY - _h * 0.05);
                 _anim.Play("knockoff");
+                break;
+            case PetState.SideRest:
+                _vx = 0; _vy = 0;
+                _stateTimer = _sm.SideRestDuration();
+                _anim.Play("siderest");
+                break;
+            case PetState.Wakeup:
+                _vx = 0; _vy = 0;
+                _anim.Play("wakeup");   // non-looping; reverts to idle when finished
+                break;
+            case PetState.Spin:
+                _vx = 0; _vy = 0;
+                _spinFlip = 0.14;
+                _stateTimer = _sm.SpinDuration();
+                _anim.Play("walk");     // legs churn while we flip facing -> looks like a spin
                 break;
             case PetState.Fall:
                 _anim.Play("fall");

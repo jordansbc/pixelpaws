@@ -23,5 +23,8 @@ public enum PetState
     Yawn,        // big yawn (precedes sleep)
     Loaf,        // bread-loaf rest
     Gift,        // carrying a gift to the centre of the screen
-    Knockoff     // pawing a pebble off a window edge
+    Knockoff,    // pawing a pebble off a window edge
+    SideRest,    // lazy lying-on-side rest
+    Wakeup,      // brief stretch-awake when leaving a nap
+    Spin         // playful in-place tail-chase spin
 }

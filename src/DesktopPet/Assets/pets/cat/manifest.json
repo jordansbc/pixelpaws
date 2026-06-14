@@ -24,6 +24,8 @@
     "yawn":        { "frames": [37, 38],                        "fps": 2.5,  "loop": false },
     "loaf":        { "frames": [39],                            "fps": 1,    "loop": true  },
     "gift":        { "frames": [40],                            "fps": 1,    "loop": true  },
-    "knockoff":    { "frames": [41],                            "fps": 1,    "loop": true  }
+    "knockoff":    { "frames": [41],                            "fps": 1,    "loop": true  },
+    "siderest":    { "frames": [11],                            "fps": 1,    "loop": true  },
+    "wakeup":      { "frames": [38, 37],                        "fps": 3,    "loop": false }
   }
 }

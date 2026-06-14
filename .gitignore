@@ -21,3 +21,6 @@ tools/*.png
 !tools/gemini_addon.png
 !tools/gemini_hunt.png
 !tools/icon_preview.png
+
+# Python cache
+__pycache__/

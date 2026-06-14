@@ -20,10 +20,18 @@
             </Image.RenderTransform>
         </Image>
 
-        <!-- Red heat overlay for fast typing — drawn on top, non-interactive -->
+        <!-- Red heat flush for fast typing — clipped to the cat's silhouette via an
+             OpacityMask of the current frame, so only the cat reddens (not the window). -->
         <Rectangle x:Name="RedOverlay"
-                   Fill="#FFE00000"
+                   Fill="#FFFF3A1E"
                    Opacity="0"
-                   IsHitTestVisible="False" />
+                   IsHitTestVisible="False">
+            <Rectangle.OpacityMask>
+                <ImageBrush x:Name="HeatMaskBrush" Stretch="Fill" />
+            </Rectangle.OpacityMask>
+            <Rectangle.RenderTransform>
+                <ScaleTransform x:Name="HeatFlip" ScaleX="1" ScaleY="1" />
+            </Rectangle.RenderTransform>
+        </Rectangle>
     </Grid>
 </Window>

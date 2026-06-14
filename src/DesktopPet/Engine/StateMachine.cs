@@ -44,11 +44,13 @@ public sealed class StateMachine
             case PetState.Pounce:
             case PetState.Bat:
             case PetState.Walk:
+            case PetState.Spin:
                 _energy -= EnergyDrain * dt;
                 break;
             case PetState.Sleep:
             case PetState.Yawn:
             case PetState.Loaf:
+            case PetState.SideRest:
                 _energy += EnergyRecover * dt;
                 break;
             default:
@@ -98,11 +100,13 @@ public sealed class StateMachine
             (PetState.Gift,    0.10),
             (PetState.Zoomies, 0.9 * active),
             (PetState.Chase,   _settings.EnableCursorChase ? 1.0 * active : 0),
-            (PetState.Groom,   1.2),
-            (PetState.Loaf,    1.0 * rest),
-            (PetState.Yawn,    _settings.EnableSleep ? 0.9 * rest : 0),  // yawn -> sleep
-            (PetState.Eat,     0.8 + hunger * 5.0),
-            (PetState.Walk,    2.0),
+            (PetState.Groom,    1.2),
+            (PetState.Loaf,     1.0 * rest),
+            (PetState.SideRest, 0.8 * rest),
+            (PetState.Spin,     0.5 * active * (playful ? 1.6 : 1.0)),
+            (PetState.Yawn,     _settings.EnableSleep ? 0.9 * rest : 0),  // yawn -> sleep
+            (PetState.Eat,      0.8 + hunger * 5.0),
+            (PetState.Walk,     2.0),
         };
 
         double total = 0;
@@ -122,6 +126,8 @@ public sealed class StateMachine
     public double ZoomiesDuration() => 1.4 + _rng.NextDouble() * 1.8;
     public double GroomDuration()   => 2.5 + _rng.NextDouble() * 3.0;
     public double LoafDuration()    => 5.0 + _rng.NextDouble() * 6.0;
+    public double SideRestDuration()=> 5.0 + _rng.NextDouble() * 7.0;
+    public double SpinDuration()    => 1.0 + _rng.NextDouble() * 0.8;
 
     /// <summary>+1 (right) or -1 (left).</summary>
     public int RandomFacing() => _rng.Next(2) == 0 ? -1 : 1;
