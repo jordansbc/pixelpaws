@@ -25,6 +25,9 @@ public partial class SettingsWindow : Window
         CursorChaseBox.IsChecked    = settings.EnableCursorChase;
         SleepBox.IsChecked          = settings.EnableSleep;
         ScrollPlayBox.IsChecked     = settings.EnableScrollPlay;
+        MoodsBox.IsChecked          = settings.EnableMoods;
+        SystemReactionsBox.IsChecked= settings.EnableSystemReactions;
+        AutoUpdateBox.IsChecked     = settings.EnableAutoUpdate;
         AutostartBox.IsChecked      = AutostartService.IsEnabled();
 
         // Select the matching ComboBox item for stretch interval
@@ -75,6 +78,12 @@ public partial class SettingsWindow : Window
         SleepBox.Unchecked                  += (_, _) => Apply();
         ScrollPlayBox.Checked               += (_, _) => Apply();
         ScrollPlayBox.Unchecked             += (_, _) => Apply();
+        MoodsBox.Checked                    += (_, _) => Apply();
+        MoodsBox.Unchecked                  += (_, _) => Apply();
+        SystemReactionsBox.Checked          += (_, _) => Apply();
+        SystemReactionsBox.Unchecked        += (_, _) => Apply();
+        AutoUpdateBox.Checked               += (_, _) => Apply();
+        AutoUpdateBox.Unchecked             += (_, _) => Apply();
         AutostartBox.Checked                += (_, _) => Apply();
         AutostartBox.Unchecked              += (_, _) => Apply();
         StretchIntervalBox.SelectionChanged += (_, _) => Apply();
@@ -89,6 +98,9 @@ public partial class SettingsWindow : Window
         _settings.EnableCursorChase     = CursorChaseBox.IsChecked   == true;
         _settings.EnableSleep           = SleepBox.IsChecked          == true;
         _settings.EnableScrollPlay      = ScrollPlayBox.IsChecked     == true;
+        _settings.EnableMoods           = MoodsBox.IsChecked          == true;
+        _settings.EnableSystemReactions = SystemReactionsBox.IsChecked == true;
+        _settings.EnableAutoUpdate      = AutoUpdateBox.IsChecked      == true;
 
         bool autostart = AutostartBox.IsChecked == true;
         _settings.Autostart = autostart;

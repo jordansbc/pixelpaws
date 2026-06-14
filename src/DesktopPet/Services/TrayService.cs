@@ -9,9 +9,12 @@ public sealed class TrayService : IDisposable
 {
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _pauseItem;
+    private readonly ToolStripMenuItem _updateItem;
+    private readonly Action _onUpdate;
 
-    public TrayService(Action onSettings, Action<bool> onPauseToggled, Action onQuit)
+    public TrayService(Action onSettings, Action<bool> onPauseToggled, Action onQuit, Action onUpdate)
     {
+        _onUpdate = onUpdate;
         var menu = new ContextMenuStrip();
 
         var settingsItem = new ToolStripMenuItem("Settings…");
@@ -20,11 +23,15 @@ public sealed class TrayService : IDisposable
         _pauseItem = new ToolStripMenuItem("Pause") { CheckOnClick = true };
         _pauseItem.Click += (_, _) => onPauseToggled(_pauseItem.Checked);
 
+        _updateItem = new ToolStripMenuItem("Update available — install now") { Visible = false };
+        _updateItem.Click += (_, _) => onUpdate();
+
         var quitItem = new ToolStripMenuItem("Quit");
         quitItem.Click += (_, _) => onQuit();
 
         menu.Items.Add(settingsItem);
         menu.Items.Add(_pauseItem);
+        menu.Items.Add(_updateItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(quitItem);
 
@@ -50,6 +57,20 @@ public sealed class TrayService : IDisposable
     }
 
     public void SetPaused(bool paused) => _pauseItem.Checked = paused;
+
+    /// <summary>Reveal the "Update now" menu item and pop a balloon inviting the update.</summary>
+    public void ShowUpdateAvailable()
+    {
+        _updateItem.Visible = true;
+        _icon.BalloonTipTitle = "PixelPaws update available";
+        _icon.BalloonTipText  = "A newer version is ready. Click here or the tray menu to install.";
+        _icon.BalloonTipIcon  = ToolTipIcon.Info;
+        _icon.BalloonTipClicked -= OnBalloonClicked;
+        _icon.BalloonTipClicked += OnBalloonClicked;
+        _icon.ShowBalloonTip(8000);
+    }
+
+    private void OnBalloonClicked(object? sender, EventArgs e) => _onUpdate();
 
     public void Dispose()
     {

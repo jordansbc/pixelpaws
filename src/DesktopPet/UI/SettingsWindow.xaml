@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="PixelPaws Settings"
-        Width="340" Height="510"
+        Width="340" Height="620"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         ShowInTaskbar="True">
@@ -23,8 +23,12 @@
 
         <TextBlock Text="Cat color" Margin="0,0,0,2"/>
         <ComboBox x:Name="CatColorBox" Width="140" HorizontalAlignment="Left" Margin="0,0,0,2">
-            <ComboBoxItem Content="Gray"   Tag="cat"/>
-            <ComboBoxItem Content="Orange" Tag="cat-orange"/>
+            <ComboBoxItem Content="Gray"         Tag="cat"/>
+            <ComboBoxItem Content="Orange"       Tag="cat-orange"/>
+            <ComboBoxItem Content="Silver tabby" Tag="cat-silver"/>
+            <ComboBoxItem Content="Cream"        Tag="cat-cream"/>
+            <ComboBoxItem Content="Chocolate"    Tag="cat-chocolate"/>
+            <ComboBoxItem Content="Blue"         Tag="cat-blue"/>
         </ComboBox>
         <TextBlock x:Name="ColorRestartNote" Text="Restart PixelPaws to apply the new color 🐱"
                    FontSize="10" Foreground="#FF8855BB" Margin="0,0,0,14"
@@ -34,6 +38,9 @@
         <CheckBox x:Name="CursorChaseBox"   Content="Chase the mouse cursor"    Margin="0,4"/>
         <CheckBox x:Name="SleepBox"         Content="Take naps"                 Margin="0,4"/>
         <CheckBox x:Name="ScrollPlayBox"    Content="Unroll toilet paper when I scroll 🧻" Margin="0,4"/>
+        <CheckBox x:Name="MoodsBox"         Content="Lifelike moods (naps at night) 🌙" Margin="0,4"/>
+        <CheckBox x:Name="SystemReactionsBox" Content="React to my computer 💻"  Margin="0,4"/>
+        <CheckBox x:Name="AutoUpdateBox"    Content="Auto-update from GitHub 🔄"  Margin="0,4"/>
         <CheckBox x:Name="AutostartBox"     Content="Start with Windows"        Margin="0,4"/>
 
         <Separator Margin="0,14"/>

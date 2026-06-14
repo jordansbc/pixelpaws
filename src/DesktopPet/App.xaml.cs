@@ -21,6 +21,8 @@ public partial class App : Application
     private SettingsWindow?  _settingsWindow;
     private KeyboardMonitor? _keyboard;
     private MouseMonitor?    _mouse;
+    private SystemMonitor?   _system;
+    private UpdateService?   _updateService;
     private DispatcherTimer? _stretchTimer;
 
     private static readonly string CrashLog =
@@ -73,16 +75,39 @@ public partial class App : Application
         // Input monitors — installed on the UI thread so the hook callbacks run here.
         _keyboard = new KeyboardMonitor();
         _mouse    = new MouseMonitor();
+        _system   = new SystemMonitor();
 
         var surfaceProvider = new SurfaceProvider(() => _petWindow!.Handle);
-        var stateMachine    = new StateMachine(_settings);
-        _engine = new PetEngine(_petWindow, animator, surfaceProvider, stateMachine, _settings, _keyboard, _mouse);
+        var stateMachine    = new StateMachine(_settings, _system);
+        _engine = new PetEngine(_petWindow, animator, surfaceProvider, stateMachine, _settings, _keyboard, _mouse, _system);
         _petWindow.Attach(_engine, _engine.Width, _engine.Height);
 
-        _tray = new TrayService(ShowSettings, OnPauseToggled, QuitApp);
+        _tray = new TrayService(ShowSettings, OnPauseToggled, QuitApp, RunUpdate);
 
         // Stretch timer — starts immediately if enabled.
         ResetStretchTimer();
+
+        // Auto-update — quietly check GitHub, surface a tray prompt if a newer build exists.
+        CheckForUpdates();
+    }
+
+    private async void CheckForUpdates()
+    {
+        if (!_settings.EnableAutoUpdate) return;
+        try
+        {
+            _updateService ??= new UpdateService();
+            if (await _updateService.IsUpdateAvailableAsync())
+                _tray?.ShowUpdateAvailable();
+        }
+        catch { /* offline / no git — ignore */ }
+    }
+
+    private void RunUpdate()
+    {
+        (_updateService ??= new UpdateService()).RunUpdater();
+        // update.bat will close this instance, rebuild, and relaunch.
+        QuitApp();
     }
 
     private void ResetStretchTimer()

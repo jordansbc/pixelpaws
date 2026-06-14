@@ -19,4 +19,14 @@ public sealed class AppSettings
 
     /// <summary>Overall size multiplier for the cat (1.0 = default). Range ~0.6–1.8.</summary>
     [JsonPropertyName("sizeScale")] public double SizeScale { get; set; } = 1.0;
+
+    /// <summary>Lifelike moods: time-of-day rhythm plus energy/hunger drive behaviour.</summary>
+    [JsonPropertyName("enableMoods")] public bool EnableMoods { get; set; } = true;
+
+    /// <summary>React to the computer: naps when you're away, livelier under load,
+    /// calmer in focus apps, rests more on low battery.</summary>
+    [JsonPropertyName("enableSystemReactions")] public bool EnableSystemReactions { get; set; } = true;
+
+    /// <summary>Check GitHub for a newer build on startup and offer a one-click update.</summary>
+    [JsonPropertyName("enableAutoUpdate")] public bool EnableAutoUpdate { get; set; } = true;
 }

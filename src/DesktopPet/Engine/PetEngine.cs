@@ -49,6 +49,7 @@ public sealed class PetEngine
     private readonly AppSettings       _settings;
     private readonly KeyboardMonitor?  _keyboard;
     private readonly MouseMonitor?     _mouse;
+    private readonly SystemMonitor?    _system;
 
     // ── physics / position ────────────────────────────────────────────────────
     private double _w, _h;                 // current on-screen pet size (DIP); changes with SizeScale
@@ -64,6 +65,7 @@ public sealed class PetEngine
     private double   _typingCooldownLeft;
     private bool     _stretchPending;
     private bool     _isPetted;            // true while mouse hovers over the window
+    private bool     _wasAway;             // user was idle long enough that the cat napped
     private double   _tpLength;            // current toilet-paper length (DIP)
     private double   _tpIdle;              // seconds since last scroll
     private double   _lastDragX, _lastDragY; // last cursor pos while dragging (DIP)
@@ -97,7 +99,7 @@ public sealed class PetEngine
 
     public PetEngine(IPetView view, SpriteAnimator anim, SurfaceProvider surfaceProvider,
                      StateMachine sm, AppSettings settings, KeyboardMonitor? keyboard = null,
-                     MouseMonitor? mouse = null)
+                     MouseMonitor? mouse = null, SystemMonitor? system = null)
     {
         _view            = view;
         _anim            = anim;
@@ -106,6 +108,7 @@ public sealed class PetEngine
         _settings        = settings;
         _keyboard        = keyboard;
         _mouse           = mouse;
+        _system          = system;
 
         _sizeScale = Math.Clamp(settings.SizeScale, 0.5, 2.0);
         _w = anim.Manifest.CellWidth  * anim.Manifest.Scale * _sizeScale;
@@ -199,6 +202,14 @@ public sealed class PetEngine
         // Surface refresh
         _surfaceTimer -= dt;
         if (_surfaceTimer <= 0) { RefreshSurfaces(); _surfaceTimer = SurfaceRefresh; }
+
+        // Evolve mood drives; react to the machine (naps when you're away, greets your return).
+        _sm.Tick(dt, _state);
+        if (_settings.EnableSystemReactions && _system != null)
+        {
+            _system.Poll();
+            UpdateAwayState();
+        }
 
         // Track cursor speed (used by bat-at-cursor and, later, hunting).
         var cur = CursorDip();
@@ -317,6 +328,28 @@ public sealed class PetEngine
         {
             if (_stretchPending) { _stretchPending = false; EnterState(PetState.Stretch); return; }
             EnterState(_sm.NextAction());
+        }
+    }
+
+    private const double AwaySeconds = 90.0;  // user idle this long => the cat curls up
+
+    /// <summary>Nap while the user is away; give a happy greeting when they return.</summary>
+    private void UpdateAwayState()
+    {
+        double idle = _system!.IdleSeconds;
+
+        if (idle > AwaySeconds)
+        {
+            _wasAway = true;
+            if (_settings.EnableSleep && IsSupported() &&
+                _state is PetState.Idle or PetState.Walk or PetState.Loaf)
+                EnterState(PetState.Sleep);
+        }
+        else if (_wasAway && idle < 2.0)
+        {
+            _wasAway = false;
+            if (IsSupported() && _state is PetState.Sleep or PetState.Loaf or PetState.Idle)
+                EnterState(PetState.Proud);   // "you're back!" — happy sparkle
         }
     }
 
