@@ -67,7 +67,96 @@ PRESETS = {
             (0.85, (0xb6, 0xc8, 0xd4)), (1.00, (0xe2, 0xec, 0xf2)),
         ],
     },
+    "cat-janet": {  # Janet: cool gray-brown mackerel tabby + white face/chest/socks
+        "gamma": 0.80,
+        "stops": [  # warm brown mackerel tabby (grayish-brown back, warm tan sides)
+            (0.00, (0x2a, 0x23, 0x1a)), (0.18, (0x46, 0x3a, 0x2a)),
+            (0.42, (0x6e, 0x5c, 0x42)), (0.62, (0x98, 0x80, 0x5d)),
+            (0.82, (0xc7, 0xb2, 0x8d)), (1.00, (0xec, 0xe2, 0xd2)),
+        ],
+        # bicolor white markings (white chin/bib/front-socks), auto-placed per frame
+        "markings": True,
+        "white_stops": [
+            (0.00, (0x9a, 0x90, 0x82)), (0.30, (0xcf, 0xc8, 0xbc)),
+            (0.60, (0xeb, 0xe6, 0xdd)), (1.00, (0xff, 0xff, 0xfb)),
+        ],
+        # recolor the base sprite's green eyes to Janet's amber/gold
+        "eyes": "amber",
+        "eye_stops": [
+            (0.00, (0x6e, 0x46, 0x12)), (0.45, (0xb5, 0x80, 0x24)),
+            (0.75, (0xd8, 0xa6, 0x3c)), (1.00, (0xf0, 0xd2, 0x72)),
+        ],
+    },
 }
+
+# Sprite grid (matches every cat manifest): 4 columns of 210x300 cells.
+CW, CH, COLS = 210, 300, 4
+
+
+def _cell_marking(cell):
+    """White-marking mask for one 210x300 cell: muzzle + chest bib + front socks,
+    anchored to the detected pink nose / green eyes and the silhouette so the
+    markings land correctly in every pose (idle, walk, sleep, the vertical drag)."""
+    H, W = cell.shape[:2]
+    rgb = cell[:, :, :3].astype(np.float64)
+    a = cell[:, :, 3]
+    R, G, B = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    mx, mn = rgb.max(2), rgb.min(2)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1), 0.0)
+    val = mx / 255.0
+    opaque = a > 12
+    if not opaque.any():
+        return np.zeros((H, W), bool)
+    feature = opaque & (sat > 0.40) & (val > 0.40)
+    green = feature & (G > R + 12) & (G > B + 12)
+    pink = feature & (R > G + 8) & (R > B + 8)
+    yy, xx = np.mgrid[0:H, 0:W]
+    oy, ox = np.where(opaque)
+    y0, y1 = oy.min(), oy.max()
+    cx = ox.mean()
+
+    eye_y = np.where(green)[0].mean() if green.any() else (y0 + 0.32 * (y1 - y0))
+    nose_sel = pink & (yy >= eye_y - 4)          # inner ears are pink but sit above the eyes
+    if nose_sel.any():
+        ny = np.where(nose_sel)[0].mean()
+        nx = np.where(nose_sel)[1].mean()
+        have_face = True
+    else:
+        ny, nx, have_face = y0 + 0.30 * (y1 - y0), cx, False
+    faces_right = nx >= cx
+    front = (xx >= cx - 8) if faces_right else (xx <= cx + 8)
+
+    mask = np.zeros((H, W), bool)
+    # muzzle/chin: small patch centered on the nose, sitting low so the tabby
+    # forehead, cheeks and "M" stripes stay (the photo cat's white is just chin+mouth)
+    rx, ry = (17.0, 11.0) if have_face else (14.0, 11.0)
+    mask |= (((xx - nx) / rx) ** 2 + ((yy - (ny + 2)) / ry) ** 2) <= 1.0
+
+    # chest bib: a narrow throat-to-front-paws stripe (not the whole belly)
+    feet_top, bib_top = y1 - 11, ny + 9
+    if feet_top > bib_top + 4:
+        bib_cx = 0.40 * nx + 0.60 * cx
+        for yv in range(int(bib_top), int(feet_top) + 1):
+            t = (yv - bib_top) / max(feet_top - bib_top, 1)
+            hw = 7 + 11 * t
+            mask[yv, max(0, int(bib_cx - hw)):min(W, int(bib_cx + hw) + 1)] = True
+
+    # front socks: thin band at the very bottom, front side only
+    sock_lo, sock_hi = (cx - 4, cx + 40) if faces_right else (cx - 40, cx + 4)
+    socks = (yy >= y1 - 10) & opaque & (xx >= sock_lo) & (xx <= sock_hi)
+    mask |= socks
+    return mask & opaque
+
+
+def markings_mask(base_arr):
+    """Full-sheet white-marking mask (bool) assembled per cell."""
+    Hs, Ws = base_arr.shape[:2]
+    full = np.zeros((Hs, Ws), bool)
+    for f in range(COLS * (Hs // CH)):
+        c, r = f % COLS, f // COLS
+        sl = (slice(r * CH, r * CH + CH), slice(c * CW, c * CW + CW))
+        full[sl] = _cell_marking(base_arr[sl])
+    return full
 
 
 def gradient_lut(stops):
@@ -109,6 +198,18 @@ def recolor(arr, preset):
     out = arr.copy()
     out[:, :, :3] = np.where(fur[:, :, None], mapped, rgb).astype(np.uint8)
     out[:, :, 3] = a
+
+    if preset.get("markings"):
+        marking = fur & markings_mask(arr)
+        white = gradient_lut(preset["white_stops"])[idx]
+        out[:, :, :3] = np.where(marking[:, :, None], white, out[:, :, :3]).astype(np.uint8)
+
+    if preset.get("eyes") == "amber":
+        # base sprite's iris is the bright-green feature pixels; remap to amber/gold
+        eye = feature & (rgb[:, :, 1] > rgb[:, :, 0] + 12) & (rgb[:, :, 1] > rgb[:, :, 2] + 12)
+        evi = (np.clip(val, 0.0, 1.0) ** 0.9 * 255).astype(np.uint8)
+        amber = gradient_lut(preset["eye_stops"])[evi]
+        out[:, :, :3] = np.where(eye[:, :, None], amber, out[:, :, :3]).astype(np.uint8)
     return out
 
 
