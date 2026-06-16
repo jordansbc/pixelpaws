@@ -36,6 +36,7 @@ public sealed class PetEngine
     private const double MaxFall          = 2600;
     private const double BaseWalkSpeed    = 55;
     private const double BaseChaseSpeed   = 115;
+    private const double JumpSpeed        = 560;   // initial upward velocity for a hop (~75px high, ~0.55s airtime)
     private const double SupportTolerance = 3.0;
     private const double SurfaceRefresh   = 0.25;
     private const double HeartInterval    = 0.45;  // seconds between heart bursts while petted
@@ -289,6 +290,7 @@ public sealed class PetEngine
             case PetState.SideRest:   UpdateStationary(dt); break;
             case PetState.Wakeup:     UpdateWakeup(dt);     break;
             case PetState.Spin:       UpdateSpin(dt);       break;
+            case PetState.Jump:       UpdateJump(dt);       break;
             case PetState.Fall:       UpdateFall(dt);       break;
             case PetState.Drag:       UpdateDrag(dt);       break;
         }
@@ -621,6 +623,28 @@ public sealed class PetEngine
         }
     }
 
+    private void UpdateJump(double dt)
+    {
+        _vy = Math.Min(_vy + Gravity * dt, MaxFall);   // gravity decelerates the rise, then pulls down
+        double prevFeet = FeetY;
+        double nextFeet = prevFeet + _vy * dt;
+
+        _x += _vx * dt;
+        if (ClampHorizontally()) _vx = -_vx;           // bounce off screen edges mid-hop
+
+        // Only look for a landing once we're descending, so we don't "land" on lift-off.
+        if (_vy > 0 && TryLand(prevFeet, nextFeet, out double landTop))
+        {
+            SetFeet(landTop);
+            _vx = 0; _vy = 0;
+            EnterState(_isPetted ? PetState.Pet : PetState.Idle);
+        }
+        else
+        {
+            SetFeet(nextFeet);
+        }
+    }
+
     private void UpdateDrag(double dt)
     {
         var c = CursorDip();
@@ -762,6 +786,13 @@ public sealed class PetEngine
                 _spinFlip = 0.14;
                 _stateTimer = _sm.SpinDuration();
                 _anim.Play("walk");     // legs churn while we flip facing -> looks like a spin
+                break;
+            case PetState.Jump:
+                // Face the cursor and hop gently toward it; the existing fall physics handle the arc.
+                _facing = Math.Sign(CursorDip().X - CenterX) is var d && d != 0 ? d : _facing;
+                _vy = -JumpSpeed;
+                _vx = _facing * BaseWalkSpeed * 0.6;
+                _anim.Play("pounce");   // reuse the existing airborne/leaping frames — no new art
                 break;
             case PetState.Fall:
                 _anim.Play("fall");

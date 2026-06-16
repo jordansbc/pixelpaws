@@ -26,5 +26,6 @@ public enum PetState
     Knockoff,    // pawing a pebble off a window edge
     SideRest,    // lazy lying-on-side rest
     Wakeup,      // brief stretch-awake when leaving a nap
-    Spin         // playful in-place tail-chase spin
+    Spin,        // playful in-place tail-chase spin
+    Jump         // playful little hop in place
 }
