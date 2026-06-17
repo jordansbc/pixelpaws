@@ -36,7 +36,7 @@ public sealed class PetEngine
     private const double MaxFall          = 2600;
     private const double BaseWalkSpeed    = 55;
     private const double BaseChaseSpeed   = 115;
-    private const double JumpSpeed        = 560;   // initial upward velocity for a hop (~75px high, ~0.55s airtime)
+    private const double JumpSpeed        = 800;   // initial upward velocity for a hop (~160px high, ~0.80s airtime)
     private const double SupportTolerance = 3.0;
     private const double SurfaceRefresh   = 0.25;
     private const double HeartInterval    = 0.45;  // seconds between heart bursts while petted

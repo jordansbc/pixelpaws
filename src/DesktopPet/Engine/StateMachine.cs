@@ -105,7 +105,7 @@ public sealed class StateMachine
             (PetState.Loaf,     1.0 * rest),
             (PetState.SideRest, 0.8 * rest),
             (PetState.Spin,     0.5 * active * (playful ? 1.6 : 1.0)),
-            (PetState.Jump,     0.6 * active),
+            (PetState.Jump,     2.2 * active),
             (PetState.Yawn,     _settings.EnableSleep ? 0.9 * rest : 0),  // yawn -> sleep
             (PetState.Eat,      0.8 + hunger * 5.0),
             (PetState.Walk,     2.0),
