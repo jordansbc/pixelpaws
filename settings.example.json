@@ -8,7 +8,7 @@
   "enableAiCompanion": false,
   "aiProvider": "gemini",
   "aiApiKey": "",
-  "aiModel": "gemini-2.0-flash",
+  "aiModel": "gemini-2.5-flash-lite",
   "aiPersona": "You are Pixel, a small, affectionate pixel-art desktop cat. Reply in 1-2 short, playful sentences.",
   "aiEnableTools": true
 }

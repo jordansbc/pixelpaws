@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using DesktopPet.Engine;
 using DesktopPet.Services;
@@ -30,8 +31,10 @@ public partial class App : Application
     // ── AI companion (built lazily, only when enabled) ──
     private HttpClient?      _http;
     private AiChatService?   _ai;
+    private AiMemory?        _aiMemory;
     private ChatInputWindow? _chatWindow;
     private DispatcherTimer? _chatterTimer;
+    private HotkeyService?   _hotkey;
     private readonly Random  _rng = new();
 
     private static readonly string CrashLog =
@@ -96,6 +99,12 @@ public partial class App : Application
 
         // AI companion: tapping the cat opens the chat box when it's enabled.
         _petWindow.ChatRequested += OpenChat;
+
+        // Global hotkey (registered on the pet window's HWND, which now exists).
+        _hotkey = new HotkeyService();
+        _hotkey.Attach(_petWindow.Handle);
+        _hotkey.Pressed += OpenChat;
+
         ApplyAiState();
 
         // Stretch timer — starts immediately if enabled.
@@ -165,7 +174,7 @@ public partial class App : Application
         if (_settingsWindow is { IsLoaded: true }) { _settingsWindow.Activate(); return; }
 
         _settingsWindow = new SettingsWindow(_settings, _settingsService,
-            onChanged: OnSettingsChanged);
+            onChanged: OnSettingsChanged, onForgetMemory: ForgetAiMemory);
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -209,6 +218,17 @@ public partial class App : Application
             _chatWindow = null;
             _engine?.ClearSpeech();
         }
+        ApplyHotkey();
+    }
+
+    /// <summary>Register or clear the global chat hotkey to match the current settings.</summary>
+    private void ApplyHotkey()
+    {
+        if (_hotkey == null) return;
+        if (_settings.EnableAiCompanion && _settings.AiHotkeyEnabled)
+            _hotkey.Register((ModifierKeys)_settings.AiHotkeyModifiers, (Key)_settings.AiHotkeyKey);
+        else
+            _hotkey.Unregister();
     }
 
     private void StartChatterTimer()
@@ -279,9 +299,17 @@ public partial class App : Application
     {
         if (_ai != null) return;
         _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _aiMemory ??= AiMemory.Load();
         var provider = new GeminiProvider(_http, _settings.AiApiKey, _settings.AiModel);
         var tools    = new CuteTools(_system, _http);
-        _ai = new AiChatService(_settings, provider, tools);
+        _ai = new AiChatService(_settings, provider, tools, _aiMemory);
+    }
+
+    /// <summary>Wipe everything the cat remembers (notes + chat history), on disk and in memory.</summary>
+    private void ForgetAiMemory()
+    {
+        (_aiMemory ??= AiMemory.Load()).Clear();
+        _ai = null;   // rebuild fresh with no seeded history next time
     }
 
     private void OpenChat()
@@ -320,6 +348,7 @@ public partial class App : Application
     private void QuitApp()
     {
         _chatterTimer?.Stop();
+        _hotkey?.Dispose();
         _chatWindow?.Close();
         _http?.Dispose();
         _keyboard?.Dispose();
@@ -332,6 +361,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _chatterTimer?.Stop();
+        _hotkey?.Dispose();
         _chatWindow?.Close();
         _http?.Dispose();
         _keyboard?.Dispose();

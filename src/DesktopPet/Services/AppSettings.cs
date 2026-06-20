@@ -41,8 +41,8 @@ public sealed class AppSettings
     /// <summary>Provider API key. Stored only in %AppData%\PixelPaws\settings.json — NEVER committed.</summary>
     [JsonPropertyName("aiApiKey")] public string AiApiKey { get; set; } = "";
 
-    /// <summary>Model id, e.g. "gemini-2.0-flash" (free tier).</summary>
-    [JsonPropertyName("aiModel")] public string AiModel { get; set; } = "gemini-2.0-flash";
+    /// <summary>Model id. gemini-2.5-flash-lite is free, fast, and good for short replies.</summary>
+    [JsonPropertyName("aiModel")] public string AiModel { get; set; } = "gemini-2.5-flash-lite";
 
     /// <summary>Persona/system prompt describing the cat's character.</summary>
     [JsonPropertyName("aiPersona")] public string AiPersona { get; set; } =
@@ -54,4 +54,16 @@ public sealed class AppSettings
 
     /// <summary>Let the cat occasionally say something on its own (mood/time/app aware). AI must be on.</summary>
     [JsonPropertyName("aiProactiveChatter")] public bool AiProactiveChatter { get; set; } = true;
+
+    /// <summary>Open the chat box with a global keyboard shortcut.</summary>
+    [JsonPropertyName("aiHotkeyEnabled")] public bool AiHotkeyEnabled { get; set; } = true;
+
+    /// <summary>Hotkey modifiers as WPF ModifierKeys flags (Alt=1, Control=2, Shift=4, Windows=8). Default Ctrl+Alt.</summary>
+    [JsonPropertyName("aiHotkeyModifiers")] public int AiHotkeyModifiers { get; set; } = 2 | 1;
+
+    /// <summary>Hotkey key as a WPF Key enum value. Default Key.C (46).</summary>
+    [JsonPropertyName("aiHotkeyKey")] public int AiHotkeyKey { get; set; } = 46;
+
+    /// <summary>Let the cat remember a few facts and your recent chats between sessions.</summary>
+    [JsonPropertyName("aiEnableMemory")] public bool AiEnableMemory { get; set; } = true;
 }

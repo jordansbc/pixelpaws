@@ -19,7 +19,7 @@ public sealed class GeminiProvider : IAiProvider
     {
         _http   = http;
         _apiKey = apiKey;
-        _model  = string.IsNullOrWhiteSpace(model) ? "gemini-2.0-flash" : model;
+        _model  = string.IsNullOrWhiteSpace(model) ? "gemini-2.5-flash-lite" : model;
     }
 
     public async Task<string> CompleteAsync(string systemPrompt, IReadOnlyList<ChatTurn> turns, CancellationToken ct)

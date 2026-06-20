@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DesktopPet.Services;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MessageBox = System.Windows.MessageBox;
 
 namespace DesktopPet.UI;
 
@@ -9,16 +12,19 @@ public partial class SettingsWindow : Window
     private readonly AppSettings    _settings;
     private readonly SettingsService _service;
     private readonly Action? _onChanged;
+    private readonly Action? _onForgetMemory;
     private readonly string _initialPet;
     private bool _loaded;
 
-    public SettingsWindow(AppSettings settings, SettingsService service, Action? onChanged = null)
+    public SettingsWindow(AppSettings settings, SettingsService service,
+                          Action? onChanged = null, Action? onForgetMemory = null)
     {
         InitializeComponent();
-        _settings   = settings;
-        _service    = service;
-        _onChanged  = onChanged;
-        _initialPet = settings.ActivePet;
+        _settings       = settings;
+        _service        = service;
+        _onChanged      = onChanged;
+        _onForgetMemory = onForgetMemory;
+        _initialPet     = settings.ActivePet;
 
         SpeedSlider.Value           = settings.Speed;
         WindowWalkingBox.IsChecked  = settings.EnableWindowWalking;
@@ -33,6 +39,9 @@ public partial class SettingsWindow : Window
         AiEnableBox.IsChecked       = settings.EnableAiCompanion;
         AiToolsBox.IsChecked        = settings.AiEnableTools;
         AiChatterBox.IsChecked      = settings.AiProactiveChatter;
+        AiHotkeyBox.IsChecked       = settings.AiHotkeyEnabled;
+        HotkeyCaptureBox.Text       = FormatHotkey((ModifierKeys)settings.AiHotkeyModifiers, (Key)settings.AiHotkeyKey);
+        AiMemoryBox.IsChecked       = settings.AiEnableMemory;
         AiKeyBox.Password           = settings.AiApiKey;
         AiPersonaBox.Text           = settings.AiPersona;
 
@@ -100,6 +109,10 @@ public partial class SettingsWindow : Window
         AiToolsBox.Unchecked                += (_, _) => Apply();
         AiChatterBox.Checked                += (_, _) => Apply();
         AiChatterBox.Unchecked              += (_, _) => Apply();
+        AiHotkeyBox.Checked                 += (_, _) => Apply();
+        AiHotkeyBox.Unchecked               += (_, _) => Apply();
+        AiMemoryBox.Checked                 += (_, _) => Apply();
+        AiMemoryBox.Unchecked               += (_, _) => Apply();
         AiKeyBox.PasswordChanged            += (_, _) => Apply();
         AiPersonaBox.TextChanged            += (_, _) => Apply();
     }
@@ -120,6 +133,8 @@ public partial class SettingsWindow : Window
         _settings.EnableAiCompanion     = AiEnableBox.IsChecked        == true;
         _settings.AiEnableTools         = AiToolsBox.IsChecked         == true;
         _settings.AiProactiveChatter    = AiChatterBox.IsChecked       == true;
+        _settings.AiHotkeyEnabled       = AiHotkeyBox.IsChecked        == true;
+        _settings.AiEnableMemory        = AiMemoryBox.IsChecked        == true;
         _settings.AiApiKey              = AiKeyBox.Password;
         if (!string.IsNullOrWhiteSpace(AiPersonaBox.Text))
             _settings.AiPersona         = AiPersonaBox.Text.Trim();
@@ -148,6 +163,46 @@ public partial class SettingsWindow : Window
 
         _service.Save();
         _onChanged?.Invoke();   // apply live (e.g. resize the cat)
+    }
+
+    /// <summary>Capture a new shortcut: record the first non-modifier key pressed with a modifier held.</summary>
+    private void HotkeyCaptureBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+        Key k = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        // Ignore bare modifier presses — wait for an actual key.
+        if (k is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+              or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin or Key.System or Key.None)
+            return;
+
+        var mods = Keyboard.Modifiers;
+        if (mods == ModifierKeys.None) return;   // require at least one modifier so it's a safe global hotkey
+
+        _settings.AiHotkeyModifiers = (int)mods;
+        _settings.AiHotkeyKey       = (int)k;
+        HotkeyCaptureBox.Text       = FormatHotkey(mods, k);
+        Apply();
+    }
+
+    private static string FormatHotkey(ModifierKeys mods, Key key)
+    {
+        var parts = new List<string>();
+        if (mods.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
+        if (mods.HasFlag(ModifierKeys.Alt))     parts.Add("Alt");
+        if (mods.HasFlag(ModifierKeys.Shift))   parts.Add("Shift");
+        if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
+        parts.Add(key.ToString());
+        return string.Join(" + ", parts);
+    }
+
+    private void ForgetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            "Make the cat forget everything it remembers about you and your past chats?",
+            "Forget memory", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Yes)
+            _onForgetMemory?.Invoke();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
