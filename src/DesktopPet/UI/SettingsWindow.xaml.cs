@@ -30,6 +30,11 @@ public partial class SettingsWindow : Window
         AutoUpdateBox.IsChecked     = settings.EnableAutoUpdate;
         AutostartBox.IsChecked      = AutostartService.IsEnabled();
 
+        AiEnableBox.IsChecked       = settings.EnableAiCompanion;
+        AiToolsBox.IsChecked        = settings.AiEnableTools;
+        AiKeyBox.Password           = settings.AiApiKey;
+        AiPersonaBox.Text           = settings.AiPersona;
+
         // Select the matching ComboBox item for stretch interval
         foreach (ComboBoxItem item in StretchIntervalBox.Items)
         {
@@ -87,6 +92,13 @@ public partial class SettingsWindow : Window
         AutostartBox.Checked                += (_, _) => Apply();
         AutostartBox.Unchecked              += (_, _) => Apply();
         StretchIntervalBox.SelectionChanged += (_, _) => Apply();
+
+        AiEnableBox.Checked                 += (_, _) => Apply();
+        AiEnableBox.Unchecked               += (_, _) => Apply();
+        AiToolsBox.Checked                  += (_, _) => Apply();
+        AiToolsBox.Unchecked                += (_, _) => Apply();
+        AiKeyBox.PasswordChanged            += (_, _) => Apply();
+        AiPersonaBox.TextChanged            += (_, _) => Apply();
     }
 
     private void Apply()
@@ -101,6 +113,12 @@ public partial class SettingsWindow : Window
         _settings.EnableMoods           = MoodsBox.IsChecked          == true;
         _settings.EnableSystemReactions = SystemReactionsBox.IsChecked == true;
         _settings.EnableAutoUpdate      = AutoUpdateBox.IsChecked      == true;
+
+        _settings.EnableAiCompanion     = AiEnableBox.IsChecked        == true;
+        _settings.AiEnableTools         = AiToolsBox.IsChecked         == true;
+        _settings.AiApiKey              = AiKeyBox.Password;
+        if (!string.IsNullOrWhiteSpace(AiPersonaBox.Text))
+            _settings.AiPersona         = AiPersonaBox.Text.Trim();
 
         bool autostart = AutostartBox.IsChecked == true;
         _settings.Autostart = autostart;

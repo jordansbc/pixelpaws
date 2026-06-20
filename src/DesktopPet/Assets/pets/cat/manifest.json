@@ -26,6 +26,7 @@
     "gift":        { "frames": [40],                            "fps": 1,    "loop": true  },
     "knockoff":    { "frames": [41],                            "fps": 1,    "loop": true  },
     "siderest":    { "frames": [11],                            "fps": 1,    "loop": true  },
-    "wakeup":      { "frames": [38, 37],                        "fps": 3,    "loop": false }
+    "wakeup":      { "frames": [38, 37],                        "fps": 3,    "loop": false },
+    "talk":        { "frames": [0, 1, 12, 1],                   "fps": 5,    "loop": true  }
   }
 }

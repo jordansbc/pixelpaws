@@ -23,6 +23,10 @@ public interface IPetView
     void ClearToiletPaper();
     /// <summary>A small pebble tumbles down from (screenX, screenY) and fades — cat knocking things off a ledge.</summary>
     void DropPebble(double screenX, double screenY);
+    /// <summary>Draw/refresh a speech bubble above the cat with the given text (AI companion).</summary>
+    void DrawSpeechBubble(double catLeft, double catTop, double catW, double catH, string text);
+    /// <summary>Remove the speech bubble.</summary>
+    void ClearSpeechBubble();
 }
 
 /// <summary>
@@ -78,6 +82,11 @@ public sealed class PetEngine
     private double   _knockCooldown;       // seconds until the cat may knock a pebble again
     private double   _targetX;             // generic target (pounce/gift) in DIP
 
+    // ── AI companion ──────────────────────────────────────────────────────────
+    private PetState? _pendingEmotion;     // emotion queued while the cat is mid-action
+    private string    _bubbleText = "";    // current speech-bubble text ("" = none)
+    private double    _bubbleTimeLeft;     // seconds the bubble stays up
+
     private const double ZoomSpeed   = 360;  // px/sec during zoomies
     private const double BatRange    = 150;  // how close the cursor must rest to be swatted
     private const double BatCalm     = 140;  // cursor must be slower than this to be swatted
@@ -98,6 +107,34 @@ public sealed class PetEngine
 
     // Let the App/scheduler set this to trigger a stretch at the next opportunity.
     public void RequestStretch() => _stretchPending = true;
+
+    /// <summary>AI companion: play an emotion animation. Applied at once unless the cat is
+    /// mid-action (drag/fall/pounce/hunt/jump), in which case it's queued for the next settle.</summary>
+    public void RequestEmotion(PetState state)
+    {
+        if (_state is PetState.Drag or PetState.Fall or PetState.Pounce or PetState.Hunt or PetState.Jump)
+        {
+            _pendingEmotion = state;
+            return;
+        }
+        _pendingEmotion = null;
+        EnterState(state);
+    }
+
+    /// <summary>AI companion: show a speech bubble above the cat for `seconds`. It tracks the cat each frame.</summary>
+    public void ShowSpeech(string text, double seconds)
+    {
+        _bubbleText     = text ?? "";
+        _bubbleTimeLeft = Math.Max(0, seconds);
+    }
+
+    /// <summary>Hide the speech bubble immediately.</summary>
+    public void ClearSpeech()
+    {
+        _bubbleTimeLeft = 0;
+        _bubbleText     = "";
+        _view.ClearSpeechBubble();
+    }
 
     public PetEngine(IPetView view, SpriteAnimator anim, SurfaceProvider surfaceProvider,
                      StateMachine sm, AppSettings settings, KeyboardMonitor? keyboard = null,
@@ -291,8 +328,17 @@ public sealed class PetEngine
             case PetState.Wakeup:     UpdateWakeup(dt);     break;
             case PetState.Spin:       UpdateSpin(dt);       break;
             case PetState.Jump:       UpdateJump(dt);       break;
+            case PetState.Talk:       UpdateStationary(dt); break;
             case PetState.Fall:       UpdateFall(dt);       break;
             case PetState.Drag:       UpdateDrag(dt);       break;
+        }
+
+        // ── speech bubble (AI companion) — redraw each frame so it follows the cat ──
+        if (_bubbleTimeLeft > 0)
+        {
+            _bubbleTimeLeft -= dt;
+            if (_bubbleTimeLeft > 0) _view.DrawSpeechBubble(_x, _y, _w, _h, _bubbleText);
+            else                     { _bubbleText = ""; _view.ClearSpeechBubble(); }
         }
 
         _view.Render(_anim.Tick(dt), _x, _y, _facing);
@@ -303,6 +349,9 @@ public sealed class PetEngine
     private void UpdateIdle(double dt)
     {
         if (!IsSupported()) { EnterState(PetState.Fall); return; }
+
+        // AI companion: a queued emotion takes priority the moment the cat is idle again.
+        if (_pendingEmotion is { } emo) { _pendingEmotion = null; EnterState(emo); return; }
 
         if (TryStartHunt()) return;
 
@@ -793,6 +842,12 @@ public sealed class PetEngine
                 _vy = -JumpSpeed;
                 _vx = _facing * BaseWalkSpeed * 0.6;
                 _anim.Play("pounce");   // reuse the existing airborne/leaping frames — no new art
+                break;
+            case PetState.Talk:
+                // Chat with you while the bubble is up — gentle bob, no wandering.
+                _vx = 0; _vy = 0;
+                _stateTimer = Math.Max(2.5, _bubbleTimeLeft);
+                _anim.Play("talk");
                 break;
             case PetState.Fall:
                 _anim.Play("fall");

@@ -172,6 +172,63 @@ public sealed class EffectsOverlay : Window
         timer.Start();
     }
 
+    // ── Speech bubble (AI companion) — a rounded card floating above the cat's head ──
+    private Border?    _bubble;
+    private TextBlock? _bubbleInk;
+    private string     _bubbleCurrent = "";
+    private static readonly SolidColorBrush BubbleFill   = new(Color.FromRgb(255, 255, 255));
+    private static readonly SolidColorBrush BubbleStroke = new(Color.FromRgb(190, 180, 214));
+    private static readonly SolidColorBrush BubbleInk    = new(Color.FromRgb(58, 50, 72));
+
+    /// <summary>Draw/refresh a speech bubble centred above the cat. Re-called every frame so it tracks the cat.</summary>
+    public void DrawSpeechBubble(double catLeft, double catTop, double catW, double catH, string text)
+    {
+        if (_bubble == null)
+        {
+            _bubbleInk = new TextBlock
+            {
+                Foreground = BubbleInk, FontSize = 13, TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 220, IsHitTestVisible = false
+            };
+            _bubble = new Border
+            {
+                Background = BubbleFill, BorderBrush = BubbleStroke, BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 7, 10, 7),
+                IsHitTestVisible = false, Effect = SoftShadow(), Child = _bubbleInk
+            };
+            _canvas.Children.Add(_bubble);
+        }
+
+        if (text != _bubbleCurrent)
+        {
+            _bubbleCurrent = text;
+            _bubbleInk!.Text = text;
+            // Fresh measure so DesiredSize is accurate for centring.
+            _bubble.Measure(new System.Windows.Size(240, double.PositiveInfinity));
+        }
+
+        double bw = _bubble.DesiredSize.Width  > 0 ? _bubble.DesiredSize.Width  : 60;
+        double bh = _bubble.DesiredSize.Height > 0 ? _bubble.DesiredSize.Height : 30;
+
+        // Overlay-local coords (same conversion as DrawToiletPaper): centred above the cat's head.
+        double catCx = catLeft + catW / 2 - Left;
+        double headY = catTop - Top;
+        double x = catCx - bw / 2;
+        double y = headY - bh - 8;
+
+        // Keep the whole bubble on-screen.
+        x = Math.Max(2, Math.Min(x, Width  - bw - 2));
+        y = Math.Max(2, Math.Min(y, Height - bh - 2));
+        Canvas.SetLeft(_bubble, x);
+        Canvas.SetTop(_bubble, y);
+    }
+
+    public void ClearSpeechBubble()
+    {
+        if (_bubble != null) { _canvas.Children.Remove(_bubble); _bubble = null; _bubbleInk = null; }
+        _bubbleCurrent = "";
+    }
+
     /// <summary>Emit a small burst of hearts/sparkles. Coordinates are screen DIPs.</summary>
     public void Burst(double screenCenterX, double screenTopY)
     {

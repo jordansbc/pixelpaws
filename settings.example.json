@@ -1,0 +1,14 @@
+{
+  "_comment": "Example of %AppData%\\PixelPaws\\settings.json. The real file lives in your AppData folder, NOT in this repo. Never paste a real API key into a file you commit. Configure the AI companion from the Settings window instead.",
+
+  "speed": 1.0,
+  "sizeScale": 1.0,
+  "activePet": "cat",
+
+  "enableAiCompanion": false,
+  "aiProvider": "gemini",
+  "aiApiKey": "",
+  "aiModel": "gemini-2.0-flash",
+  "aiPersona": "You are Pixel, a small, affectionate pixel-art desktop cat. Reply in 1-2 short, playful sentences.",
+  "aiEnableTools": true
+}

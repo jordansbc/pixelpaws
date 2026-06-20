@@ -104,6 +104,18 @@ public partial class PetWindow : Window, IPetView
     public void DropPebble(double screenX, double screenY)
         => Effects?.DropPebble(screenX, screenY);
 
+    public void DrawSpeechBubble(double catLeft, double catTop, double catW, double catH, string text)
+        => Effects?.DrawSpeechBubble(catLeft, catTop, catW, catH, text);
+
+    public void ClearSpeechBubble()
+        => Effects?.ClearSpeechBubble();
+
+    /// <summary>Raised when the user taps the cat and the AI companion is enabled — App opens the chat box.</summary>
+    public event Action? ChatRequested;
+
+    /// <summary>When true, a tap on the cat opens the AI chat box (in addition to the happy boop).</summary>
+    public bool AiTapOpensChat { get; set; }
+
     // ── Mouse events ──────────────────────────────────────────────────────────
 
     protected override void OnMouseEnter(MouseEventArgs e)
@@ -155,7 +167,10 @@ public partial class PetWindow : Window, IPetView
         if (_dragging)
             _engine?.EndDrag();
         else
+        {
             _engine?.Boop();            // tap with no movement => boop
+            if (AiTapOpensChat) ChatRequested?.Invoke();
+        }
         _pressing = false;
         _dragging = false;
         if (IsMouseOver)

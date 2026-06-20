@@ -10,9 +10,12 @@ public sealed class TrayService : IDisposable
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _updateItem;
+    private readonly ToolStripMenuItem _aiItem;
+    private readonly ToolStripMenuItem _talkItem;
     private readonly Action _onUpdate;
 
-    public TrayService(Action onSettings, Action<bool> onPauseToggled, Action onQuit, Action onUpdate)
+    public TrayService(Action onSettings, Action<bool> onPauseToggled, Action onQuit, Action onUpdate,
+                       Action<bool> onAiToggled, Action onTalk, bool aiEnabled)
     {
         _onUpdate = onUpdate;
         var menu = new ContextMenuStrip();
@@ -23,6 +26,11 @@ public sealed class TrayService : IDisposable
         _pauseItem = new ToolStripMenuItem("Pause") { CheckOnClick = true };
         _pauseItem.Click += (_, _) => onPauseToggled(_pauseItem.Checked);
 
+        _aiItem = new ToolStripMenuItem("AI companion") { CheckOnClick = true, Checked = aiEnabled };
+        _talkItem = new ToolStripMenuItem("Talk to cat…") { Enabled = aiEnabled };
+        _aiItem.Click += (_, _) => { onAiToggled(_aiItem.Checked); _talkItem.Enabled = _aiItem.Checked; };
+        _talkItem.Click += (_, _) => onTalk();
+
         _updateItem = new ToolStripMenuItem("Update available — install now") { Visible = false };
         _updateItem.Click += (_, _) => onUpdate();
 
@@ -31,8 +39,11 @@ public sealed class TrayService : IDisposable
 
         menu.Items.Add(settingsItem);
         menu.Items.Add(_pauseItem);
-        menu.Items.Add(_updateItem);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_aiItem);
+        menu.Items.Add(_talkItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_updateItem);
         menu.Items.Add(quitItem);
 
         _icon = new NotifyIcon
@@ -57,6 +68,13 @@ public sealed class TrayService : IDisposable
     }
 
     public void SetPaused(bool paused) => _pauseItem.Checked = paused;
+
+    /// <summary>Reflect the AI-companion on/off state in the tray (kept in sync with the Settings window).</summary>
+    public void SetAiEnabled(bool enabled)
+    {
+        _aiItem.Checked   = enabled;
+        _talkItem.Enabled = enabled;
+    }
 
     /// <summary>Reveal the "Update now" menu item and pop a balloon inviting the update.</summary>
     public void ShowUpdateAvailable()

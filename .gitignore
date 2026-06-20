@@ -24,3 +24,10 @@ tools/*.png
 
 # Python cache
 __pycache__/
+
+# Never commit a real settings file or any API key. The live settings file lives in
+# %AppData%\PixelPaws\settings.json (outside the repo); these block accidental local copies.
+settings.json
+**/settings.local.json
+*.key
+!settings.example.json

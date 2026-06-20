@@ -1,9 +1,11 @@
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using DesktopPet.Engine;
 using DesktopPet.Services;
+using DesktopPet.Services.Ai;
 using DesktopPet.UI;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
@@ -24,6 +26,11 @@ public partial class App : Application
     private SystemMonitor?   _system;
     private UpdateService?   _updateService;
     private DispatcherTimer? _stretchTimer;
+
+    // ── AI companion (built lazily, only when enabled) ──
+    private HttpClient?      _http;
+    private AiChatService?   _ai;
+    private ChatInputWindow? _chatWindow;
 
     private static readonly string CrashLog =
         Path.Combine(Path.GetTempPath(), "pixelpaws_crash.log");
@@ -82,7 +89,12 @@ public partial class App : Application
         _engine = new PetEngine(_petWindow, animator, surfaceProvider, stateMachine, _settings, _keyboard, _mouse, _system);
         _petWindow.Attach(_engine, _engine.Width, _engine.Height);
 
-        _tray = new TrayService(ShowSettings, OnPauseToggled, QuitApp, RunUpdate);
+        _tray = new TrayService(ShowSettings, OnPauseToggled, QuitApp, RunUpdate,
+                                OnAiToggled, OpenChat, _settings.EnableAiCompanion);
+
+        // AI companion: tapping the cat opens the chat box when it's enabled.
+        _petWindow.ChatRequested += OpenChat;
+        ApplyAiState();
 
         // Stretch timer — starts immediately if enabled.
         ResetStretchTimer();
@@ -151,7 +163,7 @@ public partial class App : Application
         if (_settingsWindow is { IsLoaded: true }) { _settingsWindow.Activate(); return; }
 
         _settingsWindow = new SettingsWindow(_settings, _settingsService,
-            onChanged: () => _engine?.ApplySize(_settings.SizeScale));
+            onChanged: OnSettingsChanged);
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -166,8 +178,86 @@ public partial class App : Application
         _tray?.SetPaused(paused);
     }
 
+    // ── AI companion ────────────────────────────────────────────────────────────
+    // Off-switch guarantee: nothing here builds an HttpClient or makes a network call
+    // unless EnableAiCompanion is true. Every entry point re-checks the flag.
+
+    private void OnSettingsChanged()
+    {
+        _engine?.ApplySize(_settings.SizeScale);
+        ApplyAiState();   // key/persona/enabled may have changed in the Settings window
+    }
+
+    /// <summary>Re-sync everything to the current AI on/off state. Rebuilds the service so a
+    /// new key/model/persona takes effect, and tears the chat UI down when disabled.</summary>
+    private void ApplyAiState()
+    {
+        bool on = _settings.EnableAiCompanion;
+        if (_petWindow != null) _petWindow.AiTapOpensChat = on;
+        _tray?.SetAiEnabled(on);
+        _ai = null;   // force a fresh provider (picks up any new key/model) on next use
+        if (!on)
+        {
+            _chatWindow?.Close();
+            _chatWindow = null;
+            _engine?.ClearSpeech();
+        }
+    }
+
+    private void OnAiToggled(bool enabled)
+    {
+        _settings.EnableAiCompanion = enabled;
+        _settingsService.Save();
+        ApplyAiState();
+    }
+
+    /// <summary>Build the chat service on first use. Only ever called when AI is enabled.</summary>
+    private void EnsureAiBuilt()
+    {
+        if (_ai != null) return;
+        _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var provider = new GeminiProvider(_http, _settings.AiApiKey, _settings.AiModel);
+        var tools    = new CuteTools(_system, _http);
+        _ai = new AiChatService(_settings, provider, tools);
+    }
+
+    private void OpenChat()
+    {
+        if (!_settings.EnableAiCompanion || _petWindow == null || _engine == null) return;
+        if (_chatWindow is { IsLoaded: true }) { _chatWindow.Activate(); return; }
+
+        EnsureAiBuilt();
+        _chatWindow = new ChatInputWindow();
+        _chatWindow.Submitted += OnChatSubmitted;
+        _chatWindow.Closed    += (_, _) => _chatWindow = null;
+        _chatWindow.PlaceNear(_petWindow.Left, _petWindow.Top, _engine.Width, _engine.Height);
+        _chatWindow.Show();
+    }
+
+    private async void OnChatSubmitted(string text)
+    {
+        if (_ai == null || _engine == null) return;
+
+        // Thinking state while we wait — gentle chat bob + an ellipsis bubble.
+        _engine.ShowSpeech("…", 30);
+        _engine.RequestEmotion(PetState.Talk);
+        try
+        {
+            var reply = await _ai.SendAsync(text, CancellationToken.None);
+            double secs = Math.Clamp(3 + reply.Text.Length * 0.06, 3, 12);
+            _engine.ShowSpeech(reply.Text, secs);
+            _engine.RequestEmotion(reply.Emotion);
+        }
+        catch
+        {
+            _engine.ShowSpeech("*mew?*", 3);
+        }
+    }
+
     private void QuitApp()
     {
+        _chatWindow?.Close();
+        _http?.Dispose();
         _keyboard?.Dispose();
         _mouse?.Dispose();
         _stretchTimer?.Stop();
@@ -177,6 +267,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _chatWindow?.Close();
+        _http?.Dispose();
         _keyboard?.Dispose();
         _mouse?.Dispose();
         _stretchTimer?.Stop();

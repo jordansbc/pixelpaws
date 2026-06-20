@@ -181,6 +181,16 @@
       ],
       "fps": 3,
       "loop": false
+    },
+    "talk": {
+      "frames": [
+        0,
+        1,
+        12,
+        1
+      ],
+      "fps": 5,
+      "loop": true
     }
   }
 }
