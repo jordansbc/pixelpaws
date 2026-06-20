@@ -47,19 +47,38 @@ public sealed class AiChatService
             raw = await _provider.CompleteAsync(system, working, ct);
         }
 
-        // Split out the trailing [emotion] tag and strip any leftover tool tokens.
+        var (text, tag) = ParseReply(raw);
+        _history.Add(new ChatTurn("user", userText));
+        _history.Add(new ChatTurn("model", text));
+        TrimHistory();
+
+        return new Reply(text, EmotionMap.Resolve(tag));
+    }
+
+    /// <summary>An unprompted, in-character one-liner based on the current context (time, app,
+    /// system). Spontaneous remarks aren't persisted to history so they don't clutter the chat.</summary>
+    public async Task<Reply> ChatterAsync(string context, CancellationToken ct)
+    {
+        var working = new List<ChatTurn>(_history)
+        {
+            new("user", $"(Background note — do not mention that this is automated: {context}) " +
+                        "Say one short, spontaneous, in-character line to me right now.")
+        };
+        string raw = await _provider.CompleteAsync(BuildSystemPrompt(), working, ct);
+        var (text, tag) = ParseReply(raw);
+        return new Reply(text, EmotionMap.Resolve(tag));
+    }
+
+    /// <summary>Split a raw model reply into visible text and the trailing [emotion] tag.</summary>
+    private static (string text, string tag) ParseReply(string raw)
+    {
         string tag     = "neutral";
         string trimmed = raw.TrimEnd();
         var em = EmotionTag.Match(trimmed);
         if (em.Success) { tag = em.Groups["tag"].Value; trimmed = trimmed[..em.Index]; }
         string text = ToolToken.Replace(trimmed, "").Trim();
         if (text.Length == 0) text = "*mrrp*";
-
-        _history.Add(new ChatTurn("user", userText));
-        _history.Add(new ChatTurn("model", text));
-        TrimHistory();
-
-        return new Reply(text, EmotionMap.Resolve(tag));
+        return (text, tag);
     }
 
     private string BuildSystemPrompt()

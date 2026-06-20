@@ -51,4 +51,7 @@ public sealed class AppSettings
 
     /// <summary>Let the cat call cute tools (time, weather, system stats).</summary>
     [JsonPropertyName("aiEnableTools")] public bool AiEnableTools { get; set; } = true;
+
+    /// <summary>Let the cat occasionally say something on its own (mood/time/app aware). AI must be on.</summary>
+    [JsonPropertyName("aiProactiveChatter")] public bool AiProactiveChatter { get; set; } = true;
 }

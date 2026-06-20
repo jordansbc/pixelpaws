@@ -31,6 +31,8 @@ public partial class App : Application
     private HttpClient?      _http;
     private AiChatService?   _ai;
     private ChatInputWindow? _chatWindow;
+    private DispatcherTimer? _chatterTimer;
+    private readonly Random  _rng = new();
 
     private static readonly string CrashLog =
         Path.Combine(Path.GetTempPath(), "pixelpaws_crash.log");
@@ -196,12 +198,73 @@ public partial class App : Application
         if (_petWindow != null) _petWindow.AiTapOpensChat = on;
         _tray?.SetAiEnabled(on);
         _ai = null;   // force a fresh provider (picks up any new key/model) on next use
-        if (!on)
+        if (on)
         {
+            StartChatterTimer();
+        }
+        else
+        {
+            StopChatterTimer();
             _chatWindow?.Close();
             _chatWindow = null;
             _engine?.ClearSpeech();
         }
+    }
+
+    private void StartChatterTimer()
+    {
+        if (_chatterTimer != null) return;
+        _chatterTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(6) };
+        _chatterTimer.Tick += OnChatterTick;
+        _chatterTimer.Start();
+    }
+
+    private void StopChatterTimer()
+    {
+        _chatterTimer?.Stop();
+        _chatterTimer = null;
+    }
+
+    /// <summary>Every so often, maybe let the cat say something unprompted — but only when the
+    /// user is present, the cat is calm and quiet, and AI + chatter are both enabled.</summary>
+    private async void OnChatterTick(object? sender, EventArgs e)
+    {
+        if (!_settings.EnableAiCompanion || !_settings.AiProactiveChatter) return;
+        if (_engine == null || _engine.Paused || _engine.IsSpeaking) return;
+        if (_chatWindow is { IsLoaded: true }) return;
+        if (_system != null && _system.IdleSeconds > 60) return;  // don't talk to an empty chair
+        if (_rng.NextDouble() > 0.30) return;                     // ~once every ~20 min on average
+
+        EnsureAiBuilt();
+        if (_ai == null) return;
+        try
+        {
+            var reply = await _ai.ChatterAsync(BuildChatterContext(), CancellationToken.None);
+            if (_engine == null || _engine.IsSpeaking) return;    // state may have changed mid-await
+            double secs = Math.Clamp(3 + reply.Text.Length * 0.06, 3, 10);
+            _engine.ShowSpeech(reply.Text, secs);
+            _engine.RequestEmotion(reply.Emotion);
+        }
+        catch { /* stay quiet on failure */ }
+    }
+
+    private string BuildChatterContext()
+    {
+        _system?.Poll();
+        int hour = DateTime.Now.Hour;
+        string tod = hour < 6 ? "it's late at night" : hour < 12 ? "it's morning"
+                   : hour < 17 ? "it's afternoon" : hour < 21 ? "it's evening" : "it's night";
+        string app = _system?.Foreground switch
+        {
+            AppContextKind.Focus  => ", the user is working in a focus app",
+            AppContextKind.Browse => ", the user is browsing the web",
+            AppContextKind.Play   => ", the user is in something fun",
+            _ => ""
+        };
+        string load = _system != null && _system.CpuLoad > 0.75 ? ", the computer is working hard" : "";
+        string batt = _system != null && _system.OnBattery && _system.BatteryPercent is >= 0 and <= 20
+                    ? ", the laptop battery is low" : "";
+        return $"{tod}{app}{load}{batt}";
     }
 
     private void OnAiToggled(bool enabled)
@@ -256,6 +319,7 @@ public partial class App : Application
 
     private void QuitApp()
     {
+        _chatterTimer?.Stop();
         _chatWindow?.Close();
         _http?.Dispose();
         _keyboard?.Dispose();
@@ -267,6 +331,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _chatterTimer?.Stop();
         _chatWindow?.Close();
         _http?.Dispose();
         _keyboard?.Dispose();

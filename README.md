@@ -35,7 +35,32 @@ dotnet build -c Release
 - **Typing reaction** — when you type, the cat types along at a tiny keyboard; type *fast* and it turns **red** and frantic. Calms down shortly after you stop.
 - **Stretch reminder** — on a timer (off / 15 / 30 / 45 / 60 min) the cat stretches and a cute "stretch time!" popup nudges you to stretch too.
 - **Toilet paper** 🧻 — scroll the mouse wheel and the cat unrolls a trail of toilet paper beside it (it retracts when you stop).
-- **Tray icon** → Settings / Pause / Quit. Settings persist to `%AppData%\PixelPaws\settings.json`. Single instance only.
+- **Tray icon** → Settings / Pause / AI companion / Quit. Settings persist to `%AppData%\PixelPaws\settings.json`. Single instance only.
+
+## 🤖 AI companion (optional, off by default)
+
+The cat can also **talk to you**. It's **disabled by default** — nothing AI-related runs and no
+network request is made until you turn it on.
+
+- **Chat** — with it enabled, **tap the cat** (or tray → *Talk to cat…*), type, and it replies
+  in-character in a speech bubble above its head.
+- **Emotion → animation** — the reply carries a hidden emotion tag that drives the cat's animation
+  (happy → sparkle, excited → zoomies, sleepy → loaf, silly → spin, …). This is the one idea
+  borrowed from [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber).
+- **Cute tools** — it can check the **time**, your **system stats** (CPU/battery/app), and the
+  **weather** when you ask.
+- **Speaks up on its own** — occasionally makes a short, context-aware remark (time of day, what
+  you're doing) when you're around. Toggle in Settings.
+
+### Setup
+
+1. Get a **free** Google **Gemini** API key at [aistudio.google.com](https://aistudio.google.com/app/apikey).
+2. Open **Settings** (tray → *Settings…*), tick **"Let me chat with the cat"**, and paste the key.
+
+The key is stored **only** in `%AppData%\PixelPaws\settings.json` on your PC — it is **never** sent
+anywhere except your chosen LLM provider, and is **never** committed (the repo's `.gitignore` blocks
+`settings.json` and `*.key`; see `settings.example.json` for the schema). The provider is pluggable
+(`Services/Ai/IAiProvider.cs`) so Groq/Ollama can be added later.
 
 ## How it works
 
@@ -50,6 +75,7 @@ dotnet build -c Release
 | Click-through overlay for hearts / toilet paper | `src/DesktopPet/UI/EffectsOverlay.cs` |
 | Global keyboard / mouse-wheel hooks | `src/DesktopPet/Services/KeyboardMonitor.cs`, `MouseMonitor.cs` |
 | Tray / settings / autostart | `src/DesktopPet/Services/` |
+| AI companion (chat, emotion map, cute tools, provider) | `src/DesktopPet/Services/Ai/`, `src/DesktopPet/UI/ChatInputWindow.xaml(.cs)` |
 
 The pet is a borderless, transparent, top-most, no-taskbar window sized to one sprite cell; the engine
 moves it by setting `Left`/`Top`. Surfaces (the desktop floor above the taskbar + the top edge of every

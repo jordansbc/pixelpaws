@@ -32,6 +32,7 @@ public partial class SettingsWindow : Window
 
         AiEnableBox.IsChecked       = settings.EnableAiCompanion;
         AiToolsBox.IsChecked        = settings.AiEnableTools;
+        AiChatterBox.IsChecked      = settings.AiProactiveChatter;
         AiKeyBox.Password           = settings.AiApiKey;
         AiPersonaBox.Text           = settings.AiPersona;
 
@@ -97,6 +98,8 @@ public partial class SettingsWindow : Window
         AiEnableBox.Unchecked               += (_, _) => Apply();
         AiToolsBox.Checked                  += (_, _) => Apply();
         AiToolsBox.Unchecked                += (_, _) => Apply();
+        AiChatterBox.Checked                += (_, _) => Apply();
+        AiChatterBox.Unchecked              += (_, _) => Apply();
         AiKeyBox.PasswordChanged            += (_, _) => Apply();
         AiPersonaBox.TextChanged            += (_, _) => Apply();
     }
@@ -116,6 +119,7 @@ public partial class SettingsWindow : Window
 
         _settings.EnableAiCompanion     = AiEnableBox.IsChecked        == true;
         _settings.AiEnableTools         = AiToolsBox.IsChecked         == true;
+        _settings.AiProactiveChatter    = AiChatterBox.IsChecked       == true;
         _settings.AiApiKey              = AiKeyBox.Password;
         if (!string.IsNullOrWhiteSpace(AiPersonaBox.Text))
             _settings.AiPersona         = AiPersonaBox.Text.Trim();

@@ -104,6 +104,8 @@ public sealed class PetEngine
     public bool   Paused         { get; set; }
     public double Width          => _w;
     public double Height         => _h;
+    /// <summary>True while a speech bubble is currently showing (AI companion).</summary>
+    public bool   IsSpeaking     => _bubbleTimeLeft > 0;
 
     // Let the App/scheduler set this to trigger a stretch at the next opportunity.
     public void RequestStretch() => _stretchPending = true;
