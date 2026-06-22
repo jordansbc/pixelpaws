@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -7,6 +8,9 @@ namespace DesktopPet.Services;
 /// <summary>System-tray icon with a Settings / Pause / Quit menu.</summary>
 public sealed class TrayService : IDisposable
 {
+    /// <summary>Where the "Support PixelPaws" menu item sends people. Same link as the repo's Sponsor button.</summary>
+    private const string DonateUrl = "https://www.paypal.me/jordanschoner";
+
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _updateItem;
@@ -31,6 +35,9 @@ public sealed class TrayService : IDisposable
         _aiItem.Click += (_, _) => { onAiToggled(_aiItem.Checked); _talkItem.Enabled = _aiItem.Checked; };
         _talkItem.Click += (_, _) => onTalk();
 
+        var donateItem = new ToolStripMenuItem("Support PixelPaws ☕");
+        donateItem.Click += (_, _) => OpenUrl(DonateUrl);
+
         _updateItem = new ToolStripMenuItem("Update available — install now") { Visible = false };
         _updateItem.Click += (_, _) => onUpdate();
 
@@ -43,6 +50,8 @@ public sealed class TrayService : IDisposable
         menu.Items.Add(_aiItem);
         menu.Items.Add(_talkItem);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(donateItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_updateItem);
         menu.Items.Add(quitItem);
 
@@ -54,6 +63,13 @@ public sealed class TrayService : IDisposable
             ContextMenuStrip = menu
         };
         _icon.DoubleClick += (_, _) => onSettings();
+    }
+
+    /// <summary>Open a URL in the user's default browser. Best-effort — never throws into the UI.</summary>
+    private static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { /* if no browser is available, silently do nothing */ }
     }
 
     private static Icon LoadIcon()

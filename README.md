@@ -40,7 +40,7 @@ dotnet build -c Release
 - **Typing reaction** — when you type, the cat types along at a tiny keyboard; type *fast* and it turns **red** and frantic. Calms down shortly after you stop.
 - **Stretch reminder** — on a timer (off / 15 / 30 / 45 / 60 min) the cat stretches and a cute "stretch time!" popup nudges you to stretch too.
 - **Toilet paper** 🧻 — scroll the mouse wheel and the cat unrolls a trail of toilet paper beside it (it retracts when you stop).
-- **Tray icon** → Settings / Pause / AI companion / Quit. Settings persist to `%AppData%\PixelPaws\settings.json`. Single instance only.
+- **Tray icon** → Settings / Pause / AI companion / Support / Quit. Settings persist to `%AppData%\PixelPaws\settings.json`. Single instance only.
 
 ## 🤖 AI companion (optional, off by default)
 
