@@ -6,6 +6,11 @@ open windows, reacts when you type, stretches on a timer, and unrolls toilet pap
 
 Built with **C# / WPF on .NET 8**. Original art (not Comnyang's) — this is a clone of the *mechanism*.
 
+<!-- DEMO: record the cat (wander / walk-on-windows / typing reaction / toilet paper),
+     save it to docs/demo.gif, then uncomment the line below.
+![PixelPaws demo](docs/demo.gif)
+-->
+
 ## Quick setup (one-click)
 
 After cloning, just **double-click `install.bat`**. It builds the app (Release), puts a
@@ -104,3 +109,18 @@ frames, normalizes and bottom-aligns them, and writes a clean sheet.
 - The pet gets onto window tops by being dragged there or when a window appears under it; it doesn't yet
   climb window sides autonomously (Shimeji-style).
 - Optional tray app icon: drop an `app.ico` in `Assets/` (falls back to the system icon otherwise).
+
+## Credits
+
+- **Inspiration** — the *mechanism* is inspired by [Comnyang](https://comnyang.com/) and the
+  broader Shimeji-style desktop-pet genre. All of PixelPaws' code and sprite art are original
+  (the cats were generated/edited from scratch, not taken from Comnyang).
+- **Emotion → animation idea** — borrowed from
+  [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber): the LLM reply carries a
+  hidden emotion tag that drives the cat's animation.
+- **AI** — the optional companion runs on Google's free [Gemini](https://aistudio.google.com/)
+  API and is off by default; your key stays on your machine.
+
+## License
+
+[MIT](LICENSE) — free to use, modify, and share. If you enjoy it, a ⭐ on GitHub is appreciated.
