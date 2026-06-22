@@ -1,6 +1,6 @@
 # PixelPaws — a desktop pet for Windows
 
-A Comnyang-style desktop mascot: a cute pixel-art **black cat** that lives on top of your screen,
+A Comnyang-style desktop mascot: a cute pixel-art **cat** that lives on top of your screen,
 wanders, watches your cursor, naps, eats, can be dragged around, walks along the top edges of your
 open windows, reacts when you type, stretches on a timer, and unrolls toilet paper when you scroll. 🐾
 
