@@ -30,13 +30,50 @@ public sealed class AppSettings
     /// <summary>Check GitHub for a newer build on startup and offer a one-click update.</summary>
     [JsonPropertyName("enableAutoUpdate")] public bool EnableAutoUpdate { get; set; } = true;
 
+    /// <summary>Settle down while you present, screen-share, or play a full-screen game.</summary>
+    [JsonPropertyName("enableQuietMode")] public bool EnableQuietMode { get; set; } = true;
+
+    /// <summary>Hide the cat entirely during those moments instead of just calming it down.</summary>
+    [JsonPropertyName("hideWhenPresenting")] public bool HideWhenPresenting { get; set; } = false;
+
+    /// <summary>
+    /// Simulation ticks per second; 0 follows the compositor. Not exposed in Settings, because
+    /// measurement showed it saves nothing: the CPU cost of the pet is dominated by being
+    /// subscribed to WPF's render loop at all (~2.9% of a core with an empty handler), not by
+    /// the work done per tick. It is kept as a cap for very high refresh-rate displays, where
+    /// the simulation would otherwise run several times more often than anything can show.
+    /// </summary>
+    [JsonPropertyName("targetFps")] public int TargetFps { get; set; } = 60;
+
+    // ── Continuity: remember where the cat was and how it felt ──────────────────
+
+    /// <summary>Pick up where the cat left off (position and mood) instead of resetting.</summary>
+    [JsonPropertyName("rememberPetState")] public bool RememberPetState { get; set; } = true;
+
+    /// <summary>Last known position in DIPs. NaN = never saved.</summary>
+    [JsonPropertyName("lastPetX")] public double LastPetX { get; set; } = double.NaN;
+    [JsonPropertyName("lastPetY")] public double LastPetY { get; set; } = double.NaN;
+
+    /// <summary>Last known drives, 0..1. Negative = never saved.</summary>
+    [JsonPropertyName("lastEnergy")] public double LastEnergy { get; set; } = -1;
+    [JsonPropertyName("lastHunger")] public double LastHunger { get; set; } = -1;
+
     // ── AI companion (all default OFF — nothing runs and no network call is made unless enabled) ──
 
     /// <summary>Master switch for the AI companion. When false, zero AI code runs.</summary>
     [JsonPropertyName("enableAiCompanion")] public bool EnableAiCompanion { get; set; } = false;
 
-    /// <summary>LLM provider id. Currently "gemini" (Google Gemini free tier).</summary>
+    /// <summary>LLM provider id: "gemini" (Google's free tier) or "ollama" (local, private, free).</summary>
     [JsonPropertyName("aiProvider")] public string AiProvider { get; set; } = "gemini";
+
+    /// <summary>Base URL of a local Ollama server, used when <see cref="AiProvider"/> is "ollama".</summary>
+    [JsonPropertyName("ollamaUrl")] public string OllamaUrl { get; set; } = "http://localhost:11434";
+
+    /// <summary>Model name to ask Ollama for, e.g. "llama3.2" or "qwen2.5:3b".</summary>
+    [JsonPropertyName("ollamaModel")] public string OllamaModel { get; set; } = "llama3.2";
+
+    /// <summary>Type the cat's reply out a piece at a time instead of popping it in whole.</summary>
+    [JsonPropertyName("aiStreaming")] public bool AiStreaming { get; set; } = true;
 
     /// <summary>Provider API key. Stored only in %AppData%\PixelPaws\settings.json — NEVER committed.</summary>
     [JsonPropertyName("aiApiKey")] public string AiApiKey { get; set; } = "";

@@ -5,7 +5,12 @@ namespace DesktopPet.Services;
 /// <summary>Lightweight file logger for diagnosing behaviour. Set Enabled=false to disable.</summary>
 public static class DebugLog
 {
-    public static bool Enabled = false;
+    /// <summary>
+    /// Off unless PIXELPAWS_DEBUG=1 is set, so users never accumulate a log they didn't ask for
+    /// — but anyone reporting a bug can turn it on without a special build.
+    /// </summary>
+    public static bool Enabled =
+        Environment.GetEnvironmentVariable("PIXELPAWS_DEBUG") is "1" or "true";
     private static readonly string Path =
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pixelpaws_debug.log");
     private static readonly object Gate = new();

@@ -1,11 +1,26 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using DesktopPet.Native;
 
 namespace DesktopPet.Services;
 
 /// <summary>What kind of app is in the foreground, so the pet can read the room.</summary>
 public enum AppContextKind { Other, Focus, Browse, Play }
+
+/// <summary>Why the pet should keep its head down, if it should.</summary>
+public enum QuietReason
+{
+    None,
+    /// <summary>Presentation mode is on.</summary>
+    Presenting,
+    /// <summary>A full-screen Direct3D app — almost always a game.</summary>
+    FullScreenGame,
+    /// <summary>Some other full-screen app. Screen sharing usually lands here.</summary>
+    FullScreenApp,
+    /// <summary>Focus assist / do-not-disturb is on.</summary>
+    FocusAssist,
+}
 
 /// <summary>
 /// Lightweight, poll-on-demand view of the machine's state: how long the user has
@@ -30,6 +45,16 @@ public sealed class SystemMonitor
     public bool OnBattery { get; private set; }
     public AppContextKind Foreground { get; private set; } = AppContextKind.Other;
 
+    /// <summary>
+    /// True when the user is presenting, screen sharing, gaming full-screen, or has focus
+    /// assist on — i.e. any moment where a cat doing zoomies would be an embarrassment rather
+    /// than a delight. Mirrors the signal Windows itself uses to suppress toast notifications.
+    /// </summary>
+    public bool ShouldNotDisturb { get; private set; }
+
+    /// <summary>Why <see cref="ShouldNotDisturb"/> is set, for logging and the tray tooltip.</summary>
+    public QuietReason Quiet { get; private set; } = QuietReason.None;
+
     /// <summary>Refresh the cached values if the sample interval has elapsed.</summary>
     public void Poll()
     {
@@ -41,7 +66,30 @@ public sealed class SystemMonitor
         SampleCpu();
         SampleBattery();
         SampleForeground();
+        SampleNotificationState();
     }
+
+    private void SampleNotificationState()
+    {
+        Quiet = MapQuiet(Win32.GetUserNotificationState());
+        ShouldNotDisturb = Quiet != QuietReason.None;
+    }
+
+    /// <summary>
+    /// Translate Windows' notification state into a reason to keep quiet.
+    ///
+    /// NotPresent (locked, screensaver, or switched-away session) is deliberately NOT quiet:
+    /// nobody is watching, so there is nothing to interrupt, and the pet should be its normal
+    /// self the moment the user comes back. AppScreenSaver is likewise not the user's problem.
+    /// </summary>
+    public static QuietReason MapQuiet(UserNotificationState state) => state switch
+    {
+        UserNotificationState.PresentationMode     => QuietReason.Presenting,
+        UserNotificationState.RunningD3dFullScreen => QuietReason.FullScreenGame,
+        UserNotificationState.Busy                 => QuietReason.FullScreenApp,
+        UserNotificationState.QuietTime            => QuietReason.FocusAssist,
+        _                                                => QuietReason.None,
+    };
 
     private void SampleIdle()
     {
