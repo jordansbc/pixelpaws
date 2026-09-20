@@ -3,6 +3,19 @@ using System.Text;
 
 namespace DesktopPet.Native;
 
+/// <summary>The states SHQueryUserNotificationState can report. Public (rather than nested in
+/// the internal Win32 class) so the mapping that consumes it can be unit-tested.</summary>
+public enum UserNotificationState
+{
+    NotPresent            = 1, // screensaver / locked / logged off
+    Busy                  = 2, // a full-screen app is running (not D3D)
+    RunningD3dFullScreen  = 3, // a full-screen D3D app - usually a game
+    PresentationMode      = 4, // presentation mode is on
+    AcceptsNotifications  = 5, // the normal, interruptible case
+    QuietTime             = 6, // the first hour after a fresh install, or focus assist
+    AppScreenSaver        = 7,
+}
+
 /// <summary>
 /// Thin P/Invoke layer. All coordinates returned here are PHYSICAL pixels
 /// (screen space), which the engine converts to DIPs via the active DPI scale.
@@ -89,6 +102,71 @@ internal static class Win32
         if (DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) != 0)
             return false;
         return cloaked != 0;
+    }
+
+    // ── Monitors ────────────────────────────────────────────────────────────
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;   // full monitor rect, virtual-screen physical pixels
+        public RECT rcWork;      // minus taskbar/appbars, same coordinate space
+        public int dwFlags;
+    }
+
+    public delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
+
+    /// <summary>
+    /// Every monitor's full and working rectangle, in physical virtual-screen pixels.
+    ///
+    /// This deliberately uses Win32 rather than WinForms' Screen class: under PerMonitorV2
+    /// awareness, Screen's coordinates depend on the caller's DPI context and can come back
+    /// already scaled, which silently disagrees with the physical pixels GetWindowRect hands
+    /// the surface scanner. GetMonitorInfo is always physical, so every rect the engine sees
+    /// lives in one coordinate space.
+    /// </summary>
+    public static List<(RECT Monitor, RECT Work)> GetMonitors()
+    {
+        var found = new List<(RECT, RECT)>();
+
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr h, IntPtr _, ref RECT _, IntPtr _) =>
+        {
+            var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (GetMonitorInfo(h, ref info))
+                found.Add((info.rcMonitor, info.rcWork));
+            return true;
+        }, IntPtr.Zero);
+
+        return found;
+    }
+
+    // ── "Is the user presenting?" ───────────────────────────────────────────
+
+    [DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out UserNotificationState state);
+
+    /// <summary>
+    /// Ask Windows whether now is a good moment to be noticed. This is the same signal the OS
+    /// uses to decide whether to show toast notifications, so it covers screen sharing (which
+    /// puts most conferencing apps full-screen), games, presentation mode and focus assist.
+    /// Returns <see cref="UserNotificationState.AcceptsNotifications"/> if the call fails, so a
+    /// failure leaves the pet behaving normally rather than silently muting it forever.
+    /// </summary>
+    public static UserNotificationState GetUserNotificationState()
+    {
+        try
+        {
+            if (SHQueryUserNotificationState(out var state) == 0) return state;
+        }
+        catch { /* shell32 unavailable — assume it is fine to play */ }
+        return UserNotificationState.AcceptsNotifications;
     }
 
     // ── Global keyboard hook ────────────────────────────────────────────────
