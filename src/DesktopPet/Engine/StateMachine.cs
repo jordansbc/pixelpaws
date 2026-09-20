@@ -29,9 +29,25 @@ public sealed class StateMachine
     {
         _settings = settings;
         _system   = system;
+
+        // Continuity: carry the cat's mood across restarts so it wakes up as the same animal
+        // rather than resetting to a neutral one every launch.
+        if (settings.RememberPetState)
+        {
+            if (settings.LastEnergy >= 0) _energy = Math.Clamp(settings.LastEnergy, 0, 1);
+            if (settings.LastHunger >= 0) _hunger = Math.Clamp(settings.LastHunger, 0, 1);
+        }
     }
 
     public double Energy => _energy;
+    public double Hunger => _hunger;
+
+    /// <summary>Record the current drives so the next launch can resume them.</summary>
+    public void CaptureInto(AppSettings settings)
+    {
+        settings.LastEnergy = _energy;
+        settings.LastHunger = _hunger;
+    }
 
     /// <summary>Evolve the drives each frame based on what the cat is currently doing.</summary>
     public void Tick(double dt, PetState state)

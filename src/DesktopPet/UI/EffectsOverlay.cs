@@ -33,6 +33,23 @@ public sealed class EffectsOverlay : Window
         IsHitTestVisible   = false;
         Content            = _canvas;
 
+        ApplyVirtualScreenBounds();
+
+        // Monitors get plugged in, unplugged and rearranged while the pet is running. Sizing
+        // once in the constructor would leave every heart, bubble and paper strip mispositioned
+        // (or clipped off the canvas) until the next restart.
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        // Raised on a system thread; the bounds are WPF properties, so marshal to the UI thread.
+        Dispatcher.BeginInvoke(ApplyVirtualScreenBounds);
+    }
+
+    private void ApplyVirtualScreenBounds()
+    {
         Left   = SystemParameters.VirtualScreenLeft;
         Top    = SystemParameters.VirtualScreenTop;
         Width  = SystemParameters.VirtualScreenWidth;

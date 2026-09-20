@@ -60,17 +60,24 @@ public sealed class CuteTools
     private async Task<string> GetWeatherAsync(CancellationToken ct)
     {
         // Keyless: locate by IP, then pull current conditions from open-meteo (also keyless).
-        using var locResp = await _http.GetAsync("http://ip-api.com/json/?fields=status,city,lat,lon", ct);
-        using var locDoc  = JsonDocument.Parse(await locResp.Content.ReadAsStringAsync(ct));
+        // HTTPS throughout — the old ip-api.com endpoint is cleartext-only on its free tier, so
+        // the user's IP and their inferred city travelled the network in the clear.
+        using var locResp = await _http.GetAsync("https://ipapi.co/json/", ct);
+        if (!locResp.IsSuccessStatusCode) return "I couldn't peek outside right now.";
+
+        using var locDoc = JsonDocument.Parse(await locResp.Content.ReadAsStringAsync(ct));
         var loc = locDoc.RootElement;
-        if (loc.GetProperty("status").GetString() != "success")
+        if (loc.TryGetProperty("error", out _)) return "I couldn't peek outside right now.";
+
+        if (!TryReadCoordinate(loc, "latitude", out double lat) ||
+            !TryReadCoordinate(loc, "longitude", out double lon))
             return "I couldn't peek outside right now.";
 
-        double lat = loc.GetProperty("lat").GetDouble();
-        double lon = loc.GetProperty("lon").GetDouble();
         string city = loc.TryGetProperty("city", out var c) ? c.GetString() ?? "" : "";
 
-        string url = $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}" +
+        // Invariant formatting: a comma-decimal locale would otherwise emit "latitude=39,75".
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string url = $"https://api.open-meteo.com/v1/forecast?latitude={lat.ToString(inv)}&longitude={lon.ToString(inv)}" +
                      "&current=temperature_2m,weather_code&temperature_unit=fahrenheit";
         using var wResp = await _http.GetAsync(url, ct);
         using var wDoc  = JsonDocument.Parse(await wResp.Content.ReadAsStringAsync(ct));
@@ -79,6 +86,22 @@ public sealed class CuteTools
         int code    = cur.GetProperty("weather_code").GetInt32();
         string where = string.IsNullOrEmpty(city) ? "outside" : $"in {city}";
         return $"It's {Math.Round(temp)}°F and {WeatherText(code)} {where}.";
+    }
+
+    /// <summary>Read a coordinate that geolocation services return as either a JSON number or a
+    /// quoted string, depending on the provider and the day.</summary>
+    private static bool TryReadCoordinate(JsonElement obj, string name, out double value)
+    {
+        value = 0;
+        if (!obj.TryGetProperty(name, out var el)) return false;
+        return el.ValueKind switch
+        {
+            JsonValueKind.Number => el.TryGetDouble(out value),
+            JsonValueKind.String => double.TryParse(el.GetString(),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out value),
+            _ => false
+        };
     }
 
     private static string WeatherText(int code) => code switch

@@ -76,14 +76,21 @@ public sealed class TrayService : IDisposable
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
-            if (File.Exists(path)) return new Icon(path);
+            using var s = AssetSource.TryOpen("Assets/app.ico");
+            if (s != null) return new Icon(s);
         }
         catch { /* fall through */ }
         return SystemIcons.Application;
     }
 
     public void SetPaused(bool paused) => _pauseItem.Checked = paused;
+
+    /// <summary>Show that a download is in flight, and stop a second click starting another.</summary>
+    public void SetUpdateBusy(bool busy)
+    {
+        _updateItem.Enabled = !busy;
+        _updateItem.Text = busy ? "Downloading update…" : "Update available — install now";
+    }
 
     /// <summary>Reflect the AI-companion on/off state in the tray (kept in sync with the Settings window).</summary>
     public void SetAiEnabled(bool enabled)

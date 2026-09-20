@@ -36,6 +36,8 @@ public partial class PetWindow : Window, IPetView
         }
     }
 
+    private bool _renderLoopRunning;
+
     public void Attach(PetEngine engine, double w, double h)
     {
         _engine = engine;
@@ -43,7 +45,32 @@ public partial class PetWindow : Window, IPetView
 
         _clock.Start();
         _lastSeconds = _clock.Elapsed.TotalSeconds;
-        CompositionTarget.Rendering += OnRendering;
+        SetRenderLoopEnabled(true);
+    }
+
+    /// <summary>
+    /// Start or stop the per-frame loop.
+    ///
+    /// Capping the tick rate inside the handler saves very little, because subscribing to
+    /// CompositionTarget.Rendering makes WPF composite every frame whether or not we do any
+    /// work in it. Detaching the handler is what actually lets the app go idle, so pausing
+    /// really does stop the cost rather than just skipping the simulation.
+    /// </summary>
+    public void SetRenderLoopEnabled(bool enabled)
+    {
+        if (enabled == _renderLoopRunning) return;
+        _renderLoopRunning = enabled;
+
+        if (enabled)
+        {
+            // Don't let the paused interval arrive as one huge dt.
+            _lastSeconds = _clock.Elapsed.TotalSeconds;
+            CompositionTarget.Rendering += OnRendering;
+        }
+        else
+        {
+            CompositionTarget.Rendering -= OnRendering;
+        }
     }
 
     public void SetPetSize(double w, double h)
@@ -54,14 +81,47 @@ public partial class PetWindow : Window, IPetView
         HeatFlip.CenterX = w / 2;
     }
 
+    /// <summary>
+    /// Simulation tick budget, for very high refresh-rate displays where the engine would
+    /// otherwise run several times more often than anything can show. 0 follows the compositor.
+    ///
+    /// This is NOT a power optimisation, despite appearances: skipping work inside the handler
+    /// saves almost nothing, because the cost is being subscribed to Rendering at all. Use
+    /// <see cref="SetRenderLoopEnabled"/> for that.
+    /// </summary>
+    public int TargetFps { get; set; }
+
     private void OnRendering(object? sender, EventArgs e)
     {
         if (_engine == null) return;
         double now = _clock.Elapsed.TotalSeconds;
-        double dt  = Math.Min(now - _lastSeconds, 0.1);
+
+        int fps = TargetFps;
+        if (fps > 0)
+        {
+            // Skip this compositor frame if the budget has not elapsed. dt then accumulates,
+            // so the simulation still advances by real time rather than running slow.
+            double minStep = 1.0 / fps;
+            if (now - _lastSeconds < minStep) return;
+        }
+
+        double dt = Math.Min(now - _lastSeconds, 0.1);
         _lastSeconds = now;
         if (dt <= 0) return;
         _engine.Update(dt);
+    }
+
+    public void SetPetVisible(bool visible)
+    {
+        // Collapsing the image rather than hiding the window keeps the HWND alive, which the
+        // global hotkey is registered against.
+        PetImage.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        RedOverlay.Visibility = PetImage.Visibility;
+        if (!visible)
+        {
+            Effects?.ClearSpeechBubble();
+            Effects?.ClearToiletPaper();
+        }
     }
 
     // ── IPetView ──────────────────────────────────────────────────────────────

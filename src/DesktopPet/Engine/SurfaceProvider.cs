@@ -33,15 +33,18 @@ public sealed class SurfaceProvider
         _selfHandle = selfHandle;
     }
 
-    public List<Surface> GetSurfaces(double dpiScale)
+    public List<Surface> GetSurfaces(double dpiScale, DesktopGeometry desktop)
     {
-        var work = SystemParameters.WorkArea; // already DIPs
-        var surfaces = new List<Surface>
+        // One floor per monitor: each sits just above that screen's taskbar. A single
+        // primary-only floor would strand the pet the moment it crossed onto another display.
+        var surfaces = new List<Surface>(desktop.WorkAreas.Count + 8);
+        for (int i = 0; i < desktop.WorkAreas.Count; i++)
         {
-            // The floor: sits just above the taskbar, spanning the whole work area.
-            new Surface(work.Left, work.Right, work.Bottom)
-        };
+            var area = desktop.WorkAreas[i];
+            surfaces.Add(new Surface(area.Left, area.Right, area.Bottom));
+        }
 
+        var bounds = desktop.Bounds;
         IntPtr self = _selfHandle();
         Win32.EnumWindows((hWnd, _) =>
         {
@@ -53,12 +56,14 @@ public sealed class SurfaceProvider
             double right = r.Right / dpiScale;
             double top = r.Top / dpiScale;
 
-            // Ignore off-screen / absurd rects.
-            if (right - left < 80 || top < work.Top - 4 || top > work.Bottom) return true;
+            // Ignore off-screen / absurd rects. Vertical limits come from the monitor the
+            // window's top edge actually sits on, not from the primary display.
+            var area = desktop.WorkAreaAt((left + right) / 2);
+            if (right - left < 80 || top < area.Top - 4 || top > area.Bottom) return true;
 
-            // Clamp horizontally to the work area so the pet never walks off the visible desktop.
-            left = Math.Max(left, work.Left);
-            right = Math.Min(right, work.Right);
+            // Clamp horizontally to the whole desktop so the pet never walks off every screen.
+            left = Math.Max(left, bounds.Left);
+            right = Math.Min(right, bounds.Right);
             if (right - left < 40) return true;
 
             surfaces.Add(new Surface(left, right, top));

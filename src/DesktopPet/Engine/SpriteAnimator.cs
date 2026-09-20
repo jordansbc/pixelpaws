@@ -23,16 +23,20 @@ public sealed class SpriteAnimator
     /// <summary>True once a non-looping animation has shown its final frame.</summary>
     public bool Finished { get; private set; }
 
-    public SpriteAnimator(PetManifest manifest, string baseDir)
+    /// <summary>Load from raw sprite-sheet bytes, so the sheet can come from disk or from an
+    /// embedded resource without this class caring which.</summary>
+    public SpriteAnimator(PetManifest manifest, byte[] sheetBytes)
     {
         _manifest = manifest;
 
-        var sheetPath = Path.Combine(baseDir, manifest.Sheet);
         var sheet = new BitmapImage();
-        sheet.BeginInit();
-        sheet.CacheOption = BitmapCacheOption.OnLoad;
-        sheet.UriSource = new Uri(sheetPath, UriKind.Absolute);
-        sheet.EndInit();
+        using (var ms = new MemoryStream(sheetBytes))
+        {
+            sheet.BeginInit();
+            sheet.CacheOption  = BitmapCacheOption.OnLoad;   // decode now; the stream closes below
+            sheet.StreamSource = ms;
+            sheet.EndInit();
+        }
         sheet.Freeze();
 
         foreach (var anim in manifest.Animations.Values)
@@ -61,10 +65,15 @@ public sealed class SpriteAnimator
         return cropped;
     }
 
-    /// <summary>Switch to a named animation. No-op if already playing it.</summary>
+    /// <summary>
+    /// Switch to a named animation. Re-playing the animation already running is a no-op for
+    /// looping clips, but restarts a non-looping one: those hold their last frame and leave
+    /// <see cref="Finished"/> latched true, so silently ignoring the call would make the
+    /// caller's next Finished-gated state end on the frame it began.
+    /// </summary>
     public void Play(string name)
     {
-        if (name == _currentName) return;
+        if (name == _currentName && _current.Loop) return;
         if (!_manifest.Animations.TryGetValue(name, out var def))
             return; // unknown animation: keep current
 

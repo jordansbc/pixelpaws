@@ -25,8 +25,12 @@ public partial class App : Application
     private KeyboardMonitor? _keyboard;
     private MouseMonitor?    _mouse;
     private SystemMonitor?   _system;
+    private HookWatchdog?    _hookWatchdog;
     private UpdateService?   _updateService;
     private DispatcherTimer? _stretchTimer;
+    private DispatcherTimer? _stateSaveTimer;
+    private DispatcherTimer? _quietWatchTimer;
+    private bool _hiddenForQuiet;
 
     // ── AI companion (built lazily, only when enabled) ──
     private HttpClient?      _http;
@@ -62,21 +66,26 @@ public partial class App : Application
 
         _settings = _settingsService.Load();
 
-        string petDir = ResolvePetDir(_settings.ActivePet);
-        string manifestPath = Path.Combine(petDir, "manifest.json");
-        if (!File.Exists(manifestPath))
+        SpriteAnimator animator;
+        try
         {
-            MessageBox.Show($"Pet assets not found:\n{manifestPath}", "PixelPaws",
+            animator = LoadPet(_settings.ActivePet);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Couldn't load the cat's artwork.\n\n{ex.Message}", "PixelPaws",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
             return;
         }
 
-        var manifest = PetManifest.Load(manifestPath);
-        var animator = new SpriteAnimator(manifest, petDir);
-
         _petWindow = new PetWindow();
         _petWindow.Show();
+
+        DebugLog.Write($"PixelPaws {AppVersion.Display} starting. " +
+                       $"DpiScale={_petWindow.DpiScale:0.###} " +
+                       $"VirtualScreen=({SystemParameters.VirtualScreenLeft},{SystemParameters.VirtualScreenTop}) " +
+                       $"{SystemParameters.VirtualScreenWidth}x{SystemParameters.VirtualScreenHeight}");
 
         // Persistent effects overlay (hearts/sparkles) — created here on the UI thread,
         // safely, NOT during the render loop.
@@ -89,10 +98,28 @@ public partial class App : Application
         _mouse    = new MouseMonitor();
         _system   = new SystemMonitor();
 
+        // Windows drops low-level hooks silently if the UI thread ever stalls; this notices and
+        // reinstalls them rather than leaving typing/scroll reactions dead for the session.
+        _hookWatchdog = new HookWatchdog(_keyboard, _mouse, _system);
+
         var surfaceProvider = new SurfaceProvider(() => _petWindow!.Handle);
         var stateMachine    = new StateMachine(_settings, _system);
         _engine = new PetEngine(_petWindow, animator, surfaceProvider, stateMachine, _settings, _keyboard, _mouse, _system);
+        _petWindow.TargetFps = _settings.TargetFps;
         _petWindow.Attach(_engine, _engine.Width, _engine.Height);
+
+        // Watch for "should the cat be hidden right now?". Deliberately a slow timer rather than
+        // engine work: when the answer is yes we detach the render loop completely, and the
+        // engine then isn't ticking to notice when the answer changes back.
+        _quietWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _quietWatchTimer.Tick += (_, _) => UpdateQuietHiding();
+        _quietWatchTimer.Start();
+
+        // Continuity: checkpoint where the cat is and how it feels, so an abrupt shutdown
+        // (or a crash) still leaves something close to the truth on disk.
+        _stateSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _stateSaveTimer.Tick += (_, _) => SavePetState();
+        _stateSaveTimer.Start();
 
         _tray = new TrayService(ShowSettings, OnPauseToggled, QuitApp, RunUpdate,
                                 OnAiToggled, OpenChat, _settings.EnableAiCompanion);
@@ -114,23 +141,58 @@ public partial class App : Application
         CheckForUpdates();
     }
 
+    private UpdateService Updater() => _updateService ??= new UpdateService(Http());
+
     private async void CheckForUpdates()
     {
         if (!_settings.EnableAutoUpdate) return;
         try
         {
-            _updateService ??= new UpdateService();
-            if (await _updateService.IsUpdateAvailableAsync())
+            if (await Updater().IsUpdateAvailableAsync())
                 _tray?.ShowUpdateAvailable();
         }
-        catch { /* offline / no git — ignore */ }
+        catch { /* offline / rate-limited / no releases yet — ignore */ }
     }
 
-    private void RunUpdate()
+    /// <summary>
+    /// Apply an update. A git checkout hands off to update.bat (a developer wants their source
+    /// pulled, not replaced by a release binary); a normal install downloads the published exe
+    /// and lets a swap script put it in place once we have exited.
+    /// </summary>
+    private async void RunUpdate()
     {
-        (_updateService ??= new UpdateService()).RunUpdater();
-        // update.bat will close this instance, rebuild, and relaunch.
-        QuitApp();
+        var updater = Updater();
+
+        if (updater.IsSourceCheckout)
+        {
+            updater.RunUpdater();
+            QuitApp();          // update.bat will rebuild and relaunch
+            return;
+        }
+
+        _tray?.SetUpdateBusy(true);
+        bool staged;
+        try { staged = await updater.DownloadAndApplyAsync(); }
+        catch { staged = false; }
+        _tray?.SetUpdateBusy(false);
+
+        if (staged)
+        {
+            QuitApp();          // the swap script is waiting for us to exit
+        }
+        else
+        {
+            MessageBox.Show(
+                "Couldn't download the update. You can grab the latest build from the releases page instead.",
+                "PixelPaws", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (updater.LatestUrl != null) OpenUrl(updater.LatestUrl);
+        }
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { }
     }
 
     private void ResetStretchTimer()
@@ -157,16 +219,26 @@ public partial class App : Application
         notification.Show();
     }
 
-    private static string ResolvePetDir(string pet)
+    /// <summary>
+    /// Load a pet pack by folder name, falling back to the default cat if the configured one
+    /// has gone missing (a user could have deleted a custom pack they were using).
+    /// Art comes from <see cref="AssetSource"/>, so this works whether the assets are embedded
+    /// in the exe or sitting on disk beside it.
+    /// </summary>
+    private static SpriteAnimator LoadPet(string pet)
     {
-        var candidates = new[]
+        foreach (string candidate in new[] { pet, "cat" })
         {
-            Path.Combine(AppContext.BaseDirectory, "Assets", "pets", pet),
-            Path.Combine(AppContext.BaseDirectory, "Assets", "pets", "cat"),
-        };
-        foreach (var c in candidates)
-            if (Directory.Exists(c)) return c;
-        return candidates[0];
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            string dir = $"Assets/pets/{candidate}";
+            if (!AssetSource.Exists($"{dir}/manifest.json")) continue;
+
+            var manifest = PetManifest.Parse(AssetSource.ReadAllText($"{dir}/manifest.json"), dir);
+            return new SpriteAnimator(manifest, AssetSource.ReadAllBytes($"{dir}/{manifest.Sheet}"));
+        }
+
+        throw new FileNotFoundException(
+            $"No pet pack found for '{pet}', and the built-in cat is missing too.");
     }
 
     private void ShowSettings()
@@ -174,7 +246,8 @@ public partial class App : Application
         if (_settingsWindow is { IsLoaded: true }) { _settingsWindow.Activate(); return; }
 
         _settingsWindow = new SettingsWindow(_settings, _settingsService,
-            onChanged: OnSettingsChanged, onForgetMemory: ForgetAiMemory);
+            onChanged: OnSettingsChanged, onForgetMemory: ForgetAiMemory,
+            onTestAi: TestAiAsync, onCheckUpdate: () => Updater().DescribeCheckAsync());
         _settingsWindow.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -187,6 +260,22 @@ public partial class App : Application
     {
         if (_engine != null) _engine.Paused = paused;
         _tray?.SetPaused(paused);
+
+        // Let the app actually go idle while paused: with the render handler detached, WPF stops
+        // compositing a frame 60 times a second for a cat that isn't moving. Clear the
+        // decorations first — once ticking stops, nothing else would take them down.
+        if (paused)
+        {
+            _engine?.ClearDecorations();
+            _petWindow?.SetRenderLoopEnabled(false);
+        }
+        else
+        {
+            // Coming back from pause must not override quiet-mode hiding.
+            _hiddenForQuiet = false;
+            UpdateQuietHiding();
+            if (!_hiddenForQuiet) _petWindow?.SetRenderLoopEnabled(true);
+        }
     }
 
     // ── AI companion ────────────────────────────────────────────────────────────
@@ -196,7 +285,47 @@ public partial class App : Application
     private void OnSettingsChanged()
     {
         _engine?.ApplySize(_settings.SizeScale);
+        if (_petWindow != null) _petWindow.TargetFps = _settings.TargetFps;
+        UpdateQuietHiding();
         ApplyAiState();   // key/persona/enabled may have changed in the Settings window
+    }
+
+    /// <summary>
+    /// Hide the cat outright while the user is presenting, if they asked for that.
+    ///
+    /// Hiding detaches the render loop rather than just collapsing the image, which is what
+    /// makes it free: being subscribed to WPF's per-frame Rendering event costs ~2.9% of a core
+    /// even with a handler that does nothing, so a "hidden" pet that kept ticking would still
+    /// be taxing the machine during exactly the presentation or game it was told to stay out of.
+    /// </summary>
+    private void UpdateQuietHiding()
+    {
+        if (_petWindow == null || _engine == null) return;
+        if (_engine.Paused) return;      // pause already owns the render loop
+
+        _system?.Poll();
+        bool shouldHide = _settings.EnableQuietMode
+                          && _settings.HideWhenPresenting
+                          && _system?.ShouldNotDisturb == true;
+
+        if (shouldHide == _hiddenForQuiet) return;
+        _hiddenForQuiet = shouldHide;
+
+        DebugLog.Write(shouldHide
+            ? $"Hiding the cat ({_system?.Quiet}) and stopping the render loop."
+            : "Showing the cat again and restarting the render loop.");
+
+        if (shouldHide) _engine.ClearDecorations();
+        _petWindow.SetPetVisible(!shouldHide);
+        _petWindow.SetRenderLoopEnabled(!shouldHide);
+    }
+
+    /// <summary>Write the cat's position and mood into settings and save.</summary>
+    private void SavePetState()
+    {
+        if (_engine == null || !_settings.RememberPetState) return;
+        _engine.CaptureStateInto(_settings);
+        _settingsService.Save();
     }
 
     /// <summary>Re-sync everything to the current AI on/off state. Rebuilds the service so a
@@ -251,6 +380,7 @@ public partial class App : Application
     {
         if (!_settings.EnableAiCompanion || !_settings.AiProactiveChatter) return;
         if (_engine == null || _engine.Paused || _engine.IsSpeaking) return;
+        if (_engine.IsQuiet) return;   // presenting / gaming / DND — don't pipe up
         if (_chatWindow is { IsLoaded: true }) return;
         if (_system != null && _system.IdleSeconds > 60) return;  // don't talk to an empty chair
         if (_rng.NextDouble() > 0.30) return;                     // ~once every ~20 min on average
@@ -294,15 +424,54 @@ public partial class App : Application
         ApplyAiState();
     }
 
+    /// <summary>
+    /// The one HttpClient in the app, shared by the AI providers, the cute tools and the
+    /// updater. GitHub's API rejects requests without a User-Agent outright, and several
+    /// keyless public APIs throttle them.
+    /// </summary>
+    private HttpClient Http() => _http ??= CreateHttp();
+
+    private static HttpClient CreateHttp()
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            $"PixelPaws/{AppVersion.Current} (+https://github.com/jordansbc/pixelpaws)");
+        return http;
+    }
+
     /// <summary>Build the chat service on first use. Only ever called when AI is enabled.</summary>
     private void EnsureAiBuilt()
     {
         if (_ai != null) return;
-        _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _http ??= CreateHttp();
         _aiMemory ??= AiMemory.Load();
-        var provider = new GeminiProvider(_http, _settings.AiApiKey, _settings.AiModel);
-        var tools    = new CuteTools(_system, _http);
+        IAiProvider provider = _settings.AiProvider.Equals("ollama", StringComparison.OrdinalIgnoreCase)
+            ? new OllamaProvider(_http, _settings.OllamaUrl, _settings.OllamaModel)
+            : new GeminiProvider(_http, _settings.AiApiKey, _settings.AiModel);
+
+        var tools = new CuteTools(_system, _http);
         _ai = new AiChatService(_settings, provider, tools, _aiMemory);
+    }
+
+    /// <summary>Round-trip the configured brain so Settings can prove a key or a local server
+    /// works, and say precisely what is wrong when it doesn't.</summary>
+    private async Task<string> TestAiAsync(CancellationToken ct)
+    {
+        EnsureAiBuilt();
+        if (_ai == null) return "Turn the AI companion on first.";
+
+        var reply = await _ai.TestAsync(ct);
+        return reply.Ok
+            ? $"Works — the cat says: \u201c{reply.Text}\u201d"
+            : reply.Failure switch
+            {
+                AiFailure.MissingKey    => "No API key set yet.",
+                AiFailure.BadKey        => "That key was rejected. Double-check it.",
+                AiFailure.QuotaExceeded => "Key works, but you're out of free quota right now.",
+                AiFailure.UnknownModel  => $"Model not found. {reply.Detail}",
+                AiFailure.Network       => $"Couldn't connect. {reply.Detail}",
+                _                       => reply.Detail ?? "Something went wrong.",
+            };
     }
 
     /// <summary>Wipe everything the cat remembers (notes + chat history), on disk and in memory.</summary>
@@ -330,27 +499,61 @@ public partial class App : Application
         if (_ai == null || _engine == null) return;
 
         // Thinking state while we wait — gentle chat bob + an ellipsis bubble.
-        _engine.ShowSpeech("…", 30);
+        _engine.ShowSpeech("\u2026", 60);
         _engine.RequestEmotion(PetState.Talk);
+
+        // Type the reply out as it streams in. The emotion tag arrives at the very end, so
+        // strip any partial "[" tail while typing rather than flashing it at the user.
+        var typed = new System.Text.StringBuilder();
+        void OnDelta(string chunk)
+        {
+            if (_engine == null) return;
+            typed.Append(chunk);
+            string shown = StripTrailingTag(typed.ToString());
+            if (shown.Length > 0) _engine.ShowSpeech(shown, 60);
+        }
+
         try
         {
-            var reply = await _ai.SendAsync(text, CancellationToken.None);
+            var reply = await _ai.SendAsync(text, CancellationToken.None, OnDelta);
             double secs = Math.Clamp(3 + reply.Text.Length * 0.06, 3, 12);
             _engine.ShowSpeech(reply.Text, secs);
             _engine.RequestEmotion(reply.Emotion);
+
+            if (!reply.Ok)
+                DebugLog.Write($"AI call failed: {reply.Failure} - {reply.Detail}");
         }
-        catch
+        catch (Exception ex)
         {
+            DebugLog.Write($"AI call threw: {ex}");
             _engine.ShowSpeech("*mew?*", 3);
         }
     }
 
+    /// <summary>
+    /// Hide a trailing emotion tag (complete or half-streamed) while text is still arriving,
+    /// so the user never watches "[jo" appear and vanish.
+    /// </summary>
+    private static string StripTrailingTag(string s)
+    {
+        int open = s.LastIndexOf('[');
+        if (open < 0) return s.TrimEnd();
+        // Only treat it as a tag if nothing but letters/] follow it.
+        for (int i = open + 1; i < s.Length; i++)
+            if (!char.IsLetter(s[i]) && s[i] != ']') return s.TrimEnd();
+        return s[..open].TrimEnd();
+    }
+
     private void QuitApp()
     {
+        SavePetState();
+        _stateSaveTimer?.Stop();
+        _quietWatchTimer?.Stop();
         _chatterTimer?.Stop();
         _hotkey?.Dispose();
         _chatWindow?.Close();
         _http?.Dispose();
+        _hookWatchdog?.Dispose();
         _keyboard?.Dispose();
         _mouse?.Dispose();
         _stretchTimer?.Stop();
@@ -360,10 +563,14 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SavePetState();
+        _stateSaveTimer?.Stop();
+        _quietWatchTimer?.Stop();
         _chatterTimer?.Stop();
         _hotkey?.Dispose();
         _chatWindow?.Close();
         _http?.Dispose();
+        _hookWatchdog?.Dispose();
         _keyboard?.Dispose();
         _mouse?.Dispose();
         _stretchTimer?.Stop();

@@ -24,10 +24,15 @@ public sealed class PetManifest
 
     public static PetManifest Load(string path)
     {
-        var json = File.ReadAllText(path);
+        return Parse(File.ReadAllText(path), path);
+    }
+
+    /// <summary>Parse a manifest that came from anywhere — a file, or an embedded resource.</summary>
+    public static PetManifest Parse(string json, string origin)
+    {
         var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         return JsonSerializer.Deserialize<PetManifest>(json, opts)
-               ?? throw new InvalidDataException($"Could not parse manifest at {path}");
+               ?? throw new InvalidDataException($"Could not parse manifest at {origin}");
     }
 }
 
