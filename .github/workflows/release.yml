@@ -1,0 +1,70 @@
+name: Release
+
+# Cut a release by pushing a version tag:
+#   git tag v1.1.0 && git push origin v1.1.0
+#
+# This builds the self-contained single-file exe and attaches it to a GitHub Release.
+# PixelPaws' in-app updater reads exactly that release asset, so this workflow is what makes
+# "check for updates" work for users who never cloned the repo.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write        # needed to create the release
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Check the tag matches the project version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          $csproj = [xml](Get-Content src/DesktopPet/DesktopPet.csproj)
+          $version = ($csproj.Project.PropertyGroup.Version | Where-Object { $_ }) -join ''
+          Write-Host "tag=$tag  csproj=$version"
+          if ($tag -ne $version) {
+            # The updater compares the running assembly version to the release tag. If they
+            # disagree, users either never see the update or are offered it forever.
+            throw "Tag v$tag does not match <Version>$version</Version> in DesktopPet.csproj."
+          }
+
+      - name: Test
+        run: dotnet test tests/DesktopPet.Tests/DesktopPet.Tests.csproj --nologo
+
+      - name: Publish
+        run: dotnet publish src/DesktopPet/DesktopPet.csproj -c Release -o dist --nologo
+
+      - name: Tidy the artifact
+        shell: pwsh
+        run: |
+          Remove-Item dist/*.pdb -Force -ErrorAction SilentlyContinue
+          $stray = Get-ChildItem dist | Where-Object { $_.Name -ne 'PixelPaws.exe' }
+          if ($stray) { throw "Publish produced more than the exe: $($stray.Name -join ', ')" }
+          Get-FileHash dist/PixelPaws.exe -Algorithm SHA256 |
+            ForEach-Object { "SHA256: $($_.Hash)" } | Tee-Object -FilePath dist/SHA256.txt
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/PixelPaws.exe
+            dist/SHA256.txt
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Download **PixelPaws.exe** below and run it. That's the whole install — no .NET, no
+            git, no extra folders. Windows may warn about an unrecognised app the first time;
+            choose **More info → Run anyway**.
+
+            Already running PixelPaws? It will offer to update itself.

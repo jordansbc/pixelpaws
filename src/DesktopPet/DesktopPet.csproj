@@ -11,15 +11,44 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>PixelPaws</AssemblyName>
     <RootNamespace>DesktopPet</RootNamespace>
+
+    <!-- Bump this to cut a release. The updater compares it to the latest GitHub release tag,
+         so the tag (v1.1.0) and this value (1.1.0) must stay in step. -->
+    <Version>1.1.0</Version>
+    <Product>PixelPaws</Product>
+    <Company>PixelPaws</Company>
+    <Description>A pixel-art cat that lives on your desktop.</Description>
+
+    <!-- Single-file publish: users get one .exe with no .NET install required.
+         The sprite sheets stay loose beside it (they are Content, and the loader reads them
+         from disk by path rather than as embedded resources). -->
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- `dotnet build` should stay a fast framework-dependent build for development;
+         only `dotnet publish` produces the self-contained artifact. -->
+    <SelfContained Condition="'$(_IsPublishing)' != 'true'">false</SelfContained>
     <!-- WPF owns DPI awareness via app.manifest (PerMonitorV2); silence the WinForms manifest check. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="Assets\**\*" />
-    <Content Include="Assets\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!--
+      Art is embedded, not copied, so a published PixelPaws.exe is genuinely one file.
+      AssetSource still prefers a matching file on disk, so dropping an Assets\pets\<name>
+      folder next to the exe overrides or adds a pet pack without rebuilding.
+
+      LogicalName is set explicitly because MSBuild's default resource naming mangles
+      characters that aren't valid in identifiers — the dash in "cat-orange" among them.
+    -->
+    <EmbeddedResource Include="Assets\**\*">
+      <LogicalName>DesktopPet.Assets.$([System.String]::Copy('%(RecursiveDir)').Replace('\','.'))%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

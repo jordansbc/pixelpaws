@@ -31,3 +31,6 @@ settings.json
 **/settings.local.json
 *.key
 !settings.example.json
+
+# Release artifacts
+dist/

@@ -1,14 +1,28 @@
 {
-  "_comment": "Example of %AppData%\\PixelPaws\\settings.json. The real file lives in your AppData folder, NOT in this repo. Never paste a real API key into a file you commit. Configure the AI companion from the Settings window instead.",
+  "_comment": "Example of %AppData%\\PixelPaws\\settings.json. The real file lives in your AppData folder, NOT in this repo. Never paste a real API key into a file you commit. Configure everything from the Settings window instead.",
 
   "speed": 1.0,
   "sizeScale": 1.0,
   "activePet": "cat",
 
+  "_comment_quiet": "Settle the cat down while you present, screen-share, game full-screen, or have focus assist on. hideWhenPresenting goes further and hides it entirely, which also stops the render loop.",
+  "enableQuietMode": true,
+  "hideWhenPresenting": false,
+
+  "_comment_continuity": "Wake up where the cat was, in the mood it was in. The last* values are written by the app; you don't need to set them.",
+  "rememberPetState": true,
+
+  "_comment_ai": "All AI settings are off by default. aiProvider is 'gemini' (free cloud, needs a key) or 'ollama' (local, private, no key).",
   "enableAiCompanion": false,
   "aiProvider": "gemini",
   "aiApiKey": "",
   "aiModel": "gemini-2.5-flash-lite",
+  "ollamaUrl": "http://localhost:11434",
+  "ollamaModel": "llama3.2",
   "aiPersona": "You are Pixel, a small, affectionate pixel-art desktop cat. Reply in 1-2 short, playful sentences.",
-  "aiEnableTools": true
+  "aiEnableTools": true,
+  "aiStreaming": true,
+
+  "_comment_targetFps": "Simulation ticks per second; 0 follows the display. Not in the Settings UI because it saves nothing — the cost is being subscribed to WPF's render loop at all, not the work per tick. Only useful to cap a very high refresh-rate display.",
+  "targetFps": 60
 }
