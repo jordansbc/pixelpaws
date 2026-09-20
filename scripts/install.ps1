@@ -8,11 +8,20 @@ $ErrorActionPreference = "Stop"
 # Repo root = parent of this script's folder.
 $root    = Split-Path -Parent $PSScriptRoot
 $proj    = Join-Path $root "src\DesktopPet\DesktopPet.csproj"
-$exe     = Join-Path $root "src\DesktopPet\bin\Release\net8.0-windows\PixelPaws.exe"
+$binRoot = Join-Path $root "src\DesktopPet\bin\Release"
 
 Write-Host "Building PixelPaws (Release)..." -ForegroundColor Cyan
 dotnet build $proj -c Release -nologo | Select-Object -Last 3
-if (-not (Test-Path $exe)) { throw "Build did not produce $exe" }
+
+# Locate the built exe rather than assuming its path. The output directory carries the target
+# framework and, since the project pins a RuntimeIdentifier for single-file publish, a RID
+# subfolder as well. Hardcoding that path leaves the Desktop shortcut and the auto-start entry
+# silently pointing at a stale build after any such change.
+$exe = Get-ChildItem $binRoot -Recurse -Filter PixelPaws.exe -ErrorAction SilentlyContinue |
+       Sort-Object LastWriteTime -Descending |
+       Select-Object -First 1 -ExpandProperty FullName
+if (-not $exe) { throw "Build did not produce a PixelPaws.exe under $binRoot" }
+Write-Host "Using: $exe" -ForegroundColor DarkGray
 
 # ── Desktop shortcut (with the embedded app icon) ──
 $desktop  = [Environment]::GetFolderPath("Desktop")
