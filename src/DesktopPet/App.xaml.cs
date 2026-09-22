@@ -490,7 +490,7 @@ public partial class App : Application
         _chatWindow = new ChatInputWindow();
         _chatWindow.Submitted += OnChatSubmitted;
         _chatWindow.Closed    += (_, _) => _chatWindow = null;
-        _chatWindow.PlaceNear(_petWindow.Left, _petWindow.Top, _engine.Width, _engine.Height);
+        _chatWindow.PlaceNear(_petWindow.PetLeft, _petWindow.PetTop, _engine.Width, _engine.Height);
         _chatWindow.Show();
     }
 

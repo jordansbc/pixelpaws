@@ -147,6 +147,57 @@ internal static class Win32
         return found;
     }
 
+    // ── Mixed-DPI placement ─────────────────────────────────────────────────
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hMonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    private const uint MONITOR_DEFAULTTOPRIMARY = 1;
+    private const int  MDT_EFFECTIVE_DPI        = 0;
+    private const uint SWP_NOSIZE = 0x0001, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+    private const int  SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77,
+                       SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
+
+    /// <summary>
+    /// The primary monitor's scale factor (1.0 = 100%). This is the one fixed DIP scale the
+    /// engine uses for every coordinate. A window's own DPI changes as it crosses onto a monitor
+    /// with different scaling; converting through that would re-map every position mid-walk and
+    /// throw the cat from one screen's edge into the middle of the next.
+    /// </summary>
+    public static double PrimaryMonitorScale()
+    {
+        try
+        {
+            IntPtr mon = MonitorFromPoint(new POINT(), MONITOR_DEFAULTTOPRIMARY);
+            if (GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, out uint dpi, out _) == 0 && dpi > 0)
+                return dpi / 96.0;
+        }
+        catch { /* shcore missing — fall through */ }
+        return 1.0;
+    }
+
+    /// <summary>Move a window to a position in physical pixels, independent of its DPI.</summary>
+    public static void MoveWindowPhysical(IntPtr hWnd, int x, int y) =>
+        SetWindowPos(hWnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    /// <summary>Place and size a window in physical pixels, independent of its DPI.</summary>
+    public static void SetWindowBoundsPhysical(IntPtr hWnd, int x, int y, int w, int h) =>
+        SetWindowPos(hWnd, IntPtr.Zero, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    /// <summary>The virtual screen (every monitor together) in physical pixels.</summary>
+    public static (int X, int Y, int W, int H) VirtualScreenPhysical() =>
+        (GetSystemMetrics(SM_XVIRTUALSCREEN),  GetSystemMetrics(SM_YVIRTUALSCREEN),
+         GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
+
     // ── "Is the user presenting?" ───────────────────────────────────────────
 
     [DllImport("shell32.dll")]

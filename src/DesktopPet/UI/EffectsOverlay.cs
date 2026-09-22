@@ -48,12 +48,37 @@ public sealed class EffectsOverlay : Window
         Dispatcher.BeginInvoke(ApplyVirtualScreenBounds);
     }
 
+    /// <summary>
+    /// Cover every monitor, and make canvas coordinates mean the same thing as the engine's.
+    ///
+    /// On mixed-DPI setups this window spans monitors of different scales, and its own DIPs
+    /// follow whichever one Windows assigned it — not necessarily the primary display the
+    /// engine measures in. So the window is placed in physical pixels, and the canvas is scaled
+    /// by engineScale / windowScale, so a point the engine names lands where the engine means.
+    /// </summary>
     private void ApplyVirtualScreenBounds()
     {
-        Left   = SystemParameters.VirtualScreenLeft;
-        Top    = SystemParameters.VirtualScreenTop;
-        Width  = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            // Before the HWND exists: a close-enough first placement, corrected in OnSourceInitialized.
+            Left   = SystemParameters.VirtualScreenLeft;
+            Top    = SystemParameters.VirtualScreenTop;
+            Width  = SystemParameters.VirtualScreenWidth;
+            Height = SystemParameters.VirtualScreenHeight;
+            return;
+        }
+
+        var (x, y, w, h) = DesktopPet.Native.Win32.VirtualScreenPhysical();
+        DesktopPet.Native.Win32.SetWindowBoundsPhysical(hwnd, x, y, w, h);
+
+        double engineScale = DesktopPet.Native.Win32.PrimaryMonitorScale();
+        double k = engineScale / VisualTreeHelper.GetDpi(this).DpiScaleX;
+        // Canvas origin sits at the virtual-screen origin; engine coordinates are absolute.
+        var t = new TransformGroup();
+        t.Children.Add(new TranslateTransform(-x / engineScale, -y / engineScale));
+        t.Children.Add(new ScaleTransform(k, k));
+        _canvas.RenderTransform = t;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -61,6 +86,14 @@ public sealed class EffectsOverlay : Window
         base.OnSourceInitialized(e);
         // Whole-screen overlay must never intercept clicks meant for the cat or other apps.
         DesktopPet.Native.Win32.MakeClickThrough(new WindowInteropHelper(this).Handle);
+        ApplyVirtualScreenBounds();
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        // Windows resized us to its suggested rect for the new DPI; restore full coverage.
+        Dispatcher.BeginInvoke(ApplyVirtualScreenBounds);
     }
 
     // ── Toilet paper (free-standing holder beside the cat, paper hanging straight down) ──

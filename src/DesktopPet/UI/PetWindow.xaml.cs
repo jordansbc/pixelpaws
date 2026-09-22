@@ -10,6 +10,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopPet.Engine;
+using DesktopPet.Native;
 
 namespace DesktopPet.UI;
 
@@ -27,13 +28,44 @@ public partial class PetWindow : Window, IPetView
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;
 
-    public double DpiScale
+    /// <summary>
+    /// The engine's DIP scale: the PRIMARY monitor's, not this window's. With PerMonitorV2 the
+    /// window's own DPI flips as it crosses onto a differently-scaled monitor, and dividing by
+    /// that re-maps every coordinate mid-walk (the cat leapt from one screen's edge to the
+    /// middle of the next). One fixed scale keeps the engine in a single coordinate space.
+    /// </summary>
+    public double DpiScale => Win32.PrimaryMonitorScale();
+
+    // Last position the engine asked for, in engine units. WPF's Left/Top can't be trusted for
+    // this: they're expressed in whichever DPI the window is currently on.
+    private double _left = double.NaN, _top = double.NaN;
+    private int _physX = int.MinValue, _physY = int.MinValue;
+
+    public double PetLeft => _left;
+    public double PetTop  => _top;
+
+    /// <summary>
+    /// Keep the cat the same physical size on every monitor. WPF enlarges content by each
+    /// monitor's scale, so on a 125% screen the window would outgrow the size the engine plans
+    /// around — feet sinking into the taskbar and the far edge hanging off-screen. Scaling the
+    /// content by engineScale / windowScale cancels that out.
+    /// </summary>
+    private void SyncContentScale()
     {
-        get
-        {
-            var src = PresentationSource.FromVisual(this);
-            return src?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-        }
+        if (Content is not FrameworkElement root) return;
+        double k = DpiScale / VisualTreeHelper.GetDpi(this).DpiScaleX;
+        if (root.LayoutTransform is ScaleTransform st && Math.Abs(st.ScaleX - k) < 1e-6) return;
+        root.LayoutTransform = Math.Abs(k - 1) < 1e-6 ? Transform.Identity : new ScaleTransform(k, k);
+    }
+
+    protected override void OnDpiChanged(System.Windows.DpiScale oldDpi, System.Windows.DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        SyncContentScale();
+        // Windows just moved us to its own "suggested" rect for the new DPI; put the cat back
+        // exactly where the engine has it.
+        _physX = _physY = int.MinValue;
+        if (!double.IsNaN(_left)) PlaceAt(_left, _top);
     }
 
     private bool _renderLoopRunning;
@@ -134,8 +166,29 @@ public partial class PetWindow : Window, IPetView
         // Keep the heat overlay aligned with the current frame and facing.
         HeatMaskBrush.ImageSource = frame;
         HeatFlip.ScaleX = sx;
-        Left = left;
-        Top  = top;
+        PlaceAt(left, top);
+    }
+
+    private void PlaceAt(double left, double top)
+    {
+        _left = left;
+        _top  = top;
+
+        IntPtr hwnd = Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            Left = left;
+            Top  = top;
+            return;
+        }
+
+        SyncContentScale();
+        double s = DpiScale;
+        int x = (int)Math.Round(left * s), y = (int)Math.Round(top * s);
+        if (x == _physX && y == _physY) return;
+        _physX = x;
+        _physY = y;
+        Win32.MoveWindowPhysical(hwnd, x, y);
     }
 
     public void SetHeatLevel(double level)
@@ -152,7 +205,7 @@ public partial class PetWindow : Window, IPetView
     {
         // Hearts float up from just above the cat's head. Drawn on the shared overlay —
         // NOT as new windows (creating windows in the render loop throws + is costly).
-        Effects?.Burst(Left + Width / 2, Top);
+        Effects?.Burst(_left + PetImage.Width / 2, _top);
     }
 
     public void DrawToiletPaper(double catLeft, double catTop, double catW, double catH, double length)

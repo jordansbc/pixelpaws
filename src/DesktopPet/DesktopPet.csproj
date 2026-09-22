@@ -14,7 +14,7 @@
 
     <!-- Bump this to cut a release. The updater compares it to the latest GitHub release tag,
          so the tag (v1.1.0) and this value (1.1.0) must stay in step. -->
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Product>PixelPaws</Product>
     <Company>PixelPaws</Company>
     <Description>A pixel-art cat that lives on your desktop.</Description>
