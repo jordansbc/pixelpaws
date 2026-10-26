@@ -53,12 +53,30 @@ public partial class App : Application
         // Mark handled so a single stray exception can't kill the user's pet.
         DispatcherUnhandledException += (_, args) =>
         {
-            try { File.AppendAllText(CrashLog, $"[{DateTime.Now:HH:mm:ss}] DISPATCHER\n{args.Exception}\n\n"); } catch { }
+            try { File.AppendAllText(CrashLog, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] DISPATCHER\n{args.Exception}\n\n"); } catch { }
             args.Handled = true;
         };
+        // A fatal exception off the UI thread. Drop the low-level mouse/keyboard hooks before
+        // anything else: if Windows then holds this process at a crash dialog or a debugger
+        // attach, a frozen process that still owns those hooks stalls input for the whole PC.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            try { File.AppendAllText(CrashLog, $"[{DateTime.Now:HH:mm:ss}] DOMAIN\n{args.ExceptionObject}\n\n"); } catch { }
+            try { _mouse?.Dispose(); } catch { }
+            try { _keyboard?.Dispose(); } catch { }
+            try
+            {
+                var thread = Thread.CurrentThread;
+                File.AppendAllText(CrashLog,
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] DOMAIN (fatal={args.IsTerminating}, " +
+                    $"thread={thread.ManagedThreadId} '{thread.Name}', pool={thread.IsThreadPoolThread})\n" +
+                    $"{args.ExceptionObject}\n\n");
+            }
+            catch { }
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            try { File.AppendAllText(CrashLog, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNOBSERVED TASK\n{args.Exception}\n\n"); } catch { }
+            args.SetObserved();
         };
 
         _singleInstance = new Mutex(initiallyOwned: true, "PixelPaws.SingleInstance", out bool isNew);
